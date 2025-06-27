@@ -18,15 +18,18 @@
   },
   "homepage": "https://github.com/SampleApp05/Atra-Proxy#readme",
   "dependencies": {
-    "@types/ws": "^8.18.1",
     "dotenv": "^16.6.0",
     "fs-extra": "^11.3.0",
     "node-fetch": "^3.3.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3",
     "ws": "^8.18.2"
   },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4"
-  }
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^24.0.4",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  },
+  "type": "commonjs"
 }

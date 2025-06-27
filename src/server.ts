@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import http, { request } from "http";
+import http from "http";
 import WebSocket from "ws";
 import url from "url";
 import {
