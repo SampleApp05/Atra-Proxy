@@ -1,0 +1,32 @@
+{
+  "name": "atra-proxy",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SampleApp05/Atra-Proxy.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SampleApp05/Atra-Proxy/issues"
+  },
+  "homepage": "https://github.com/SampleApp05/Atra-Proxy#readme",
+  "dependencies": {
+    "@types/ws": "^8.18.1",
+    "dotenv": "^16.6.0",
+    "fs-extra": "^11.3.0",
+    "node-fetch": "^3.3.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3",
+    "ws": "^8.18.2"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4"
+  }
+}
