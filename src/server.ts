@@ -1,11 +1,12 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import http from "http";
+import http, { request } from "http";
 import WebSocket from "ws";
 import url from "url";
 import {
   loadCache,
+  getCoinCache,
   getDataStatus,
   getCache,
   fetchCoinsData,
@@ -13,7 +14,10 @@ import {
   DataStatus,
 } from "./cacheManager";
 
+import { searchCoins } from "./search";
+
 const AUTH_TOKEN = process.env.CLIENT_AUTH_TOKEN || "super-secret-token";
+const REFRESH_INTERVAL = 5 * 60 * 1000; // 10 minutes
 
 function validateClient(request: http.IncomingMessage): Boolean {
   const { query } = url.parse(request.url || "", true);
@@ -42,6 +46,46 @@ if (initialStatus !== DataStatus.OK) {
   fetchCoinsData(wss);
 }
 
+function handleSearchMessageIfNeeded(data: WebSocket.RawData): string | null {
+  try {
+    const message = JSON.parse(data.toString());
+    const id = message.requestID;
+
+    if (
+      (message.type === "search:request" &&
+        typeof message.query === "string") === false
+    ) {
+      return null;
+    }
+
+    if (id == null || typeof id !== "string") {
+      return JSON.stringify({
+        type: "error",
+        message: "Invalid Search message format",
+        requestID: id,
+      });
+    }
+
+    let results = searchCoins(
+      message.query,
+      getCoinCache(),
+      message.maxResults || 25
+    );
+
+    return JSON.stringify({
+      type: "search:result",
+      query: message.query,
+      results,
+      requestID: id,
+    });
+  } catch (err) {
+    console.error("❌ Failed to handle incoming message:", err);
+    return JSON.stringify({
+      type: "error",
+      message: "Invalid message format",
+    });
+  }
+}
 // Handle client connections
 wss.on("connection", (ws, request) => {
   if (validateClient(request) === false) {
@@ -53,6 +97,14 @@ wss.on("connection", (ws, request) => {
   }
 
   console.log("🆕 Client connected");
+
+  ws.on("message", (data) => {
+    let message = handleSearchMessageIfNeeded(data);
+    if (message) {
+      ws.send(message);
+      return;
+    }
+  });
 
   // Immediately send status and cache to new clients
   const { data, lastUpdated } = getCache();
@@ -77,9 +129,6 @@ wss.on("connection", (ws, request) => {
     console.log("Client disconnected");
   });
 });
-
-// Periodic refresh every 10 minutes
-const REFRESH_INTERVAL = 10 * 60 * 1000;
 
 setInterval(() => {
   fetchCoinsData(wss);

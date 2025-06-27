@@ -2,7 +2,6 @@
 
 import fs from "fs";
 import WebSocket from "ws";
-import path from "path";
 import { fetchTopCoins, Coin } from "./fetcher";
 import { getWatchlist } from "./watchlistBuilder";
 
@@ -26,6 +25,10 @@ export enum UpdateVariant {
 
 let coinCache: Coin[] = [];
 let lastUpdated: string | null = null;
+
+export function getCoinCache(): Coin[] {
+  return coinCache;
+}
 
 export function getDataStatus(): DataStatus {
   if (lastUpdated == null) return DataStatus.MISSING;
