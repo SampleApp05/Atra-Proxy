@@ -1,5 +1,5 @@
 import { Coin } from "./fetcher";
-import { UpdateVariant } from "./cacheManager"; // or own file
+import { CoinUpdateVariant } from "./utils/MessageVariant";
 
 function getTopCoinsByCap(coins: Coin[]): Coin[] {
   return coins
@@ -26,18 +26,21 @@ function getTopCoinsByMove(coins: Coin[], positive: Boolean): Coin[] {
     .slice(0, 25);
 }
 
-export function getWatchlist(variant: UpdateVariant, coins: Coin[]): Coin[] {
+export function getWatchlist(
+  variant: CoinUpdateVariant,
+  coins: Coin[]
+): Coin[] {
   switch (variant) {
-    case UpdateVariant.TOP_MARKETCAP:
+    case CoinUpdateVariant.TOP_MARKETCAP:
       return getTopCoinsByCap(coins);
 
-    case UpdateVariant.TOP_GAINERS:
+    case CoinUpdateVariant.TOP_GAINERS:
       return getTopCoinsByMove(coins, true);
 
-    case UpdateVariant.TOP_LOSERS:
+    case CoinUpdateVariant.TOP_LOSERS:
       return getTopCoinsByMove(coins, false);
 
-    case UpdateVariant.TOP_VOLUME:
+    case CoinUpdateVariant.TOP_VOLUME:
       return getTopCoinsByVolume(coins);
 
     default:

@@ -1,27 +1,15 @@
-// src/cacheManager.ts
-
 import fs from "fs";
 import WebSocket from "ws";
 import { fetchTopCoins, Coin } from "./fetcher";
 import { getWatchlist } from "./watchlistBuilder";
+import { DataState } from "./utils/DataState";
+import { CoinUpdateVariant } from "./utils/MessageVariant";
+import {
+  ErrorCode,
+  buildSocketErrorResponse,
+} from "./utils/ErrorResponnseBuilder";
 
 const CACHE_FILE = "./cache/coinCache.json";
-
-export enum DataStatus {
-  OK = "ok",
-  OUTDATED = "outdated",
-  STALE = "stale",
-  LOADING = "loading",
-  MISSING = "missing",
-  FAILED = "failed",
-}
-
-export enum UpdateVariant {
-  TOP_MARKETCAP = "top_marketcap",
-  TOP_GAINERS = "top_gainers",
-  TOP_LOSERS = "top_losers",
-  TOP_VOLUME = "top_volume",
-}
 
 let coinCache: Coin[] = [];
 let lastUpdated: string | null = null;
@@ -30,15 +18,15 @@ export function getCoinCache(): Coin[] {
   return coinCache;
 }
 
-export function getDataStatus(): DataStatus {
-  if (lastUpdated == null) return DataStatus.MISSING;
+export function getDataState(): DataState {
+  if (lastUpdated == null) return DataState.MISSING;
   const updatedAt = new Date(lastUpdated).getTime();
   const now = Date.now();
   const diff = now - updatedAt;
 
-  if (diff < 5 * 60 * 1000) return DataStatus.OK;
-  if (diff < 15 * 60 * 1000) return DataStatus.OUTDATED;
-  return DataStatus.STALE;
+  if (diff < 5 * 60 * 1000) return DataState.OK;
+  if (diff < 15 * 60 * 1000) return DataState.OUTDATED;
+  return DataState.STALE;
 }
 
 export function loadCache(): void {
@@ -57,14 +45,14 @@ export function getCache() {
   return { data: coinCache, lastUpdated };
 }
 
-function persistCache(data: Coin[]) {
+export function persistCache(data: Coin[]) {
   coinCache = data;
   lastUpdated = new Date().toISOString();
   fs.writeFileSync(CACHE_FILE, JSON.stringify({ data, lastUpdated }, null, 2));
 }
 
-export function broadcastStatus(wss: WebSocket.Server, status: DataStatus) {
-  const message = JSON.stringify({ type: "status", status, lastUpdated });
+export function broadcastStatus(wss: WebSocket.Server, state: DataState) {
+  const message = JSON.stringify({ type: "status", state, lastUpdated });
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);
@@ -73,7 +61,7 @@ export function broadcastStatus(wss: WebSocket.Server, status: DataStatus) {
 }
 
 function broadcastWatchlists(wss: WebSocket.Server) {
-  const variants = Object.values(UpdateVariant);
+  const variants = Object.values(CoinUpdateVariant);
 
   variants.forEach((variant) => {
     const list = getWatchlist(variant, coinCache);
@@ -94,30 +82,27 @@ function broadcastWatchlists(wss: WebSocket.Server) {
 
 export async function fetchCoinsData(wss: WebSocket.Server) {
   try {
-    broadcastStatus(wss, DataStatus.LOADING); // or "loading"
+    broadcastStatus(wss, DataState.LOADING); // or "loading"
 
     const coins = await fetchTopCoins();
 
     if (coins.length === 0) throw new Error("Received empty coin list");
     persistCache(coins);
 
-    broadcastStatus(wss, DataStatus.OK);
+    broadcastStatus(wss, DataState.OK);
     broadcastWatchlists(wss);
   } catch (error) {
     console.error("❌ Failed to fetch coin data:", error);
 
-    const message = JSON.stringify({
-      type: "error",
-      message: "Failed to fetch data from CoinGecko",
-      details: error instanceof Error ? error.message : String(error),
-    });
+    const response = buildSocketErrorResponse(ErrorCode.FETCH_FAILED);
 
     wss.clients.forEach((client) => {
+      let dataState = getDataState();
+      broadcastStatus(wss, dataState);
+
       if (client.readyState === WebSocket.OPEN) {
-        client.send(message);
+        client.send(response);
       }
     });
-
-    broadcastStatus(wss, DataStatus.FAILED);
   }
 }
