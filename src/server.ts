@@ -1,10 +1,8 @@
-import dotenv from "dotenv";
-dotenv.config();
-
 import http from "http";
 import WebSocket from "ws";
 import url from "url";
 
+import { APIConfig } from "./utils/APIConfig";
 import { DataState } from "./utils/DataState";
 import {
   loadCache,
@@ -16,27 +14,23 @@ import {
 } from "./cacheManager";
 
 import { searchCoins, fetchFromCoinGeckoAPI } from "./search";
-import { SearchMessageVariant } from "./utils/MessageVariant";
+import { SearchMessageVariant, SocketAction} from "./utils/MessageVariant";
 import { MessageStatus } from "./utils/MessageStatus";
 import {
   ErrorCode,
   buildSocketErrorResponse,
-} from "./utils/ErrorResponnseBuilder";
-
-const AUTH_TOKEN = process.env.CLIENT_AUTH_TOKEN || "super-secret-token";
-const REFRESH_INTERVAL = 5 * 60 * 1000; // 10 minutes
+  buildSocketErrorResponseWithOriginal,
+} from "./utils/ErrorResponseBuilder";
 
 function validateClient(request: http.IncomingMessage): Boolean {
   const { query } = url.parse(request.url || "", true);
   const token = query.token;
 
   console.log("🔍 Validating client token:", token);
-  console.log("🔍 Expected token:", AUTH_TOKEN);
+  console.log("🔍 Expected token:", APIConfig.AUTH_TOKEN);
 
-  return token === AUTH_TOKEN;
+  return token === APIConfig.AUTH_TOKEN;
 }
-
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 8080;
 
 const server = http.createServer();
 
@@ -54,36 +48,59 @@ if (initialStatus !== DataState.OK) {
 }
 
 function handleSearchMessageIfNeeded(data: WebSocket.RawData, ws: WebSocket) {
+  let action = SearchMessageVariant.SEARCH_REQUEST;
+  
+  const rawMessage = data.toString();
   let parsed: any;
+  
   try {
-    parsed = JSON.parse(data.toString());
+    parsed = JSON.parse(rawMessage);
   } catch (err) {
-    let response = buildSocketErrorResponse(ErrorCode.INVALID_JSON);
-    ws.send(response);
+    // Send back the original message for frontend correlation
+    const response = {
+      status: MessageStatus.ERROR,
+      code: ErrorCode.INVALID_JSON,
+      message: "Failed to parse JSON message",
+      action,
+      originalMessage: rawMessage, // Echo back the problematic message
+      timestamp: new Date().toISOString()
+    };
+    ws.send(JSON.stringify(response));
     return;
   }
 
   const { type, query, requestID, maxResults = 25 } = parsed;
 
   if (type !== SearchMessageVariant.SEARCH_REQUEST) {
-    let response = buildSocketErrorResponse(
+    let response = buildSocketErrorResponseWithOriginal(
       ErrorCode.INVALID_VARIANT_FIELD,
+      action,
+      rawMessage,
+      null,
       requestID
     );
-
     ws.send(response);
     return;
   }
 
   if (typeof query !== "string" || query.trim() === "") {
-    let response = buildSocketErrorResponse(ErrorCode.INVALID_QUERY, requestID);
+    let response = buildSocketErrorResponseWithOriginal(
+      ErrorCode.INVALID_QUERY, 
+      action,
+      rawMessage,
+      null,
+      requestID
+    );
     ws.send(response);
     return;
   }
 
   if (typeof requestID !== "string" || requestID.trim() === "") {
-    let response = buildSocketErrorResponse(
+    let response = buildSocketErrorResponseWithOriginal(
       ErrorCode.INVALID_REQUEST_ID,
+      action,
+      rawMessage,
+      null,
       requestID
     );
     ws.send(response);
@@ -91,8 +108,11 @@ function handleSearchMessageIfNeeded(data: WebSocket.RawData, ws: WebSocket) {
   }
 
   if (typeof maxResults !== "number" || maxResults <= 0 || maxResults > 100) {
-    let response = buildSocketErrorResponse(
+    let response = buildSocketErrorResponseWithOriginal(
       ErrorCode.INVALID_MAX_RESULTS,
+      action,
+      rawMessage,
+      null,
       requestID
     );
     ws.send(response);
@@ -108,6 +128,7 @@ function handleSearchMessageIfNeeded(data: WebSocket.RawData, ws: WebSocket) {
         if (cgResults === null) {
           let response = buildSocketErrorResponse(
             ErrorCode.SEARCH_FAILED,
+            action,
             "Failed to fetch results from CoinGecko API",
             requestID
           );
@@ -128,6 +149,7 @@ function handleSearchMessageIfNeeded(data: WebSocket.RawData, ws: WebSocket) {
         console.error("Search fallback failed:", err);
         let response = buildSocketErrorResponse(
           ErrorCode.SEARCH_FAILED,
+          action,
           "Unhandled error during search fallback",
           requestID
         );
@@ -149,7 +171,7 @@ wss.on("connection", (ws, request) => {
   if (validateClient(request) === false) {
     console.log("❌ Unauthorized client attempted to connect");
 
-    let response = buildSocketErrorResponse(ErrorCode.AUTHENTICATION_FAILED);
+    let response = buildSocketErrorResponse(ErrorCode.AUTHENTICATION_FAILED, SocketAction.AUTHENTICATION);
     ws.send(response);
     ws.close();
     return;
@@ -187,9 +209,9 @@ wss.on("connection", (ws, request) => {
 
 setInterval(() => {
   fetchCoinsData(wss);
-}, REFRESH_INTERVAL);
+}, APIConfig.REFRESH_INTERVAL);
 
 // Start HTTP + WS server
-server.listen(PORT, () => {
-  console.log(`🚀 Server listening on http://localhost:${PORT}`);
+server.listen(APIConfig.PORT, () => {
+  console.log(`🚀 Server listening on http://localhost:${APIConfig.PORT}`);
 });

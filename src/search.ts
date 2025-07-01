@@ -1,5 +1,6 @@
 import { Coin } from "./fetcher";
-import { ErrorCode } from "./utils/ErrorResponnseBuilder";
+import { ErrorCode } from "./utils/ErrorResponseBuilder";
+import { APIConfig } from "./utils/APIConfig";
 
 export function searchCoins(query: string, coins: Coin[], maxResults = 25) {
   const searchQuery = query.toLowerCase();
@@ -20,12 +21,12 @@ export function searchCoins(query: string, coins: Coin[], maxResults = 25) {
  */
 export async function fetchFromCoinGeckoAPI(query: string): Promise<any[]> {
   const res = await fetch(
-    `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(
+    `${APIConfig.COINGECKO_API_HOST}/api/v3/search?query=${encodeURIComponent(
       query
     )}`,
     {
       headers: {
-        "x-cg-demo-api-key": process.env.COINGECKO_API_KEY ?? "",
+          [APIConfig.COINGECKO_API_HEADER_KEY]: APIConfig.COINGECKO_API_KEY,
       },
     }
   );

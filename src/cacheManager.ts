@@ -3,11 +3,11 @@ import WebSocket from "ws";
 import { fetchTopCoins, Coin } from "./fetcher";
 import { getWatchlist } from "./watchlistBuilder";
 import { DataState } from "./utils/DataState";
-import { CoinUpdateVariant } from "./utils/MessageVariant";
+import { CoinUpdateVariant, SocketAction } from "./utils/MessageVariant";
 import {
   ErrorCode,
   buildSocketErrorResponse,
-} from "./utils/ErrorResponnseBuilder";
+} from "./utils/ErrorResponseBuilder";
 
 const CACHE_FILE = "./cache/coinCache.json";
 
@@ -94,12 +94,12 @@ export async function fetchCoinsData(wss: WebSocket.Server) {
   } catch (error) {
     console.error("❌ Failed to fetch coin data:", error);
 
-    const response = buildSocketErrorResponse(ErrorCode.FETCH_FAILED);
+    const response = buildSocketErrorResponse(ErrorCode.FETCH_FAILED, SocketAction.FETCH);
+    let dataState = getDataState();
+    broadcastStatus(wss, dataState);
 
+    // Send error response to all connected clients
     wss.clients.forEach((client) => {
-      let dataState = getDataState();
-      broadcastStatus(wss, dataState);
-
       if (client.readyState === WebSocket.OPEN) {
         client.send(response);
       }

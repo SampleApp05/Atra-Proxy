@@ -1,7 +1,5 @@
-import dotenv from "dotenv";
-dotenv.config();
-
 import fetch from "node-fetch";
+import { APIConfig } from "./utils/APIConfig";
 
 export interface Coin {
   id: string;
@@ -15,11 +13,6 @@ export interface Coin {
   price_change_percentage_24h: number;
 }
 
-const API_KEY = (process.env.COINGECKO_API_KEY as string) || ""; // set your key in env vars
-const API_HOST = "https://api.coingecko.com";
-const API_HEADER_KEY = "x-cg-demo-api-key"; // or "x-cg-pro-api-key" for prod
-
-// delay helper
 function delay(ms: number) {
   return new Promise((res) => setTimeout(res, ms));
 }
@@ -30,14 +23,14 @@ export async function fetchTopCoins(): Promise<Coin[]> {
   const coinsMap = new Map<string, Coin>();
 
   for (let page = 1; page <= totalPages; page++) {
-    const url = `${API_HOST}/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${perPage}&page=${page}&price_change_percentage=24h`;
+    const url = `${APIConfig.COINGECKO_API_HOST}/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${perPage}&page=${page}&price_change_percentage=24h`;
 
     console.log(`🌐 Fetching page ${page}: ${url}`);
 
     try {
       const res = await fetch(url, {
         headers: {
-          [API_HEADER_KEY]: API_KEY,
+          [APIConfig.COINGECKO_API_HEADER_KEY]: APIConfig.COINGECKO_API_KEY,
         },
       });
 

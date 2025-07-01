@@ -10,3 +10,7 @@ export enum CoinUpdateVariant {
   TOP_VOLUME = "top_volume",
   COIN_CACHE = "coin_cache",
 }
+export enum SocketAction {
+  AUTHENTICATION = "authentication",
+  FETCH = "fetch",
+}

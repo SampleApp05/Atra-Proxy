@@ -1,4 +1,4 @@
 export enum MessageStatus {
-  SUCCESS = "success",
-  ERROR = "error",
+  SUCCESS = "SUCCESS",
+  ERROR = "ERROR",
 }
