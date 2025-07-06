@@ -1,6 +1,6 @@
 export enum SearchMessageVariant {
-  SEARCH_RESULT = "search:result",
-  SEARCH_REQUEST = "search:request",
+  SEARCH_RESULT = "search_result",
+  SEARCH_REQUEST = "search_request",
 }
 
 export enum CoinUpdateVariant {

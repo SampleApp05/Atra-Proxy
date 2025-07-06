@@ -32,10 +32,10 @@ class AtraProxyClient {
                     print("📩 Received: \(text)")
                     if let data = text.data(using: .utf8),
                        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                       let type = json["type"] as? String {
-                        print("📩 Message type: \(type)")
+                       let event = json["event"] as? String {
+                        print("📩 Message event: \(event)")
                         
-                        if type == "connection:established" {
+                        if event == "connection_established" {
                             print("✅ Connected successfully!")
                             if let authMethod = json["authMethod"] as? String {
                                 print("🔐 Auth method: \(authMethod)")
@@ -59,7 +59,7 @@ class AtraProxyClient {
     
     func sendSearch(query: String) {
         let searchRequest: [String: Any] = [
-            "type": "search:request",
+            "event": "search_request",
             "query": query,
             "requestID": UUID().uuidString,
             "maxResults": 10
@@ -101,7 +101,7 @@ DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
 ### Connection Established
 ```json
 {
-  "type": "connection:established",
+  "event": "connection_established",
   "message": "WebSocket connection established",
   "serverTime": "2025-07-06T13:14:55.123Z",
   "dataState": "ok",
@@ -113,7 +113,7 @@ DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
 ```json
 {
   "status": "success",
-  "variant": "search:result",
+  "variant": "search_result",
   "requestID": "your-request-id",
   "data": [
     {

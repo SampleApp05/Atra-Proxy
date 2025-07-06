@@ -61,7 +61,7 @@ export function persistCache(data: Coin[]) {
 
 export function broadcastStatus(wss: WebSocketServer, isLoading: boolean = false) {
   const message = JSON.stringify({ 
-    type: "status", 
+    event: "status", 
     lastUpdated: getUpdateTime(),
     nextUpdate: getNextUpdateTime(),
     isLoading
@@ -79,7 +79,7 @@ export function broadcastWatchlists(wss: WebSocketServer) {
   variants.forEach((variant) => {
     const list = getWatchlist(variant, coinCache);
     const message = JSON.stringify({
-      type: "watchlist:update",
+      event: "watchlist_update",
       variant,
       data: list,
       lastUpdated: getUpdateTime(),

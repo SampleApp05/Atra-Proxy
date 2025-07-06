@@ -19,7 +19,7 @@ class SearchClient {
     const requestID = `${timestamp}_${randomId}`;
 
     const message = {
-      type: "search:request",
+      event: "search_request",
       query,
       requestID,
       maxResults,
@@ -106,7 +106,7 @@ class AdvancedSearchClient {
     const requestID = `search_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     const message = {
-      type: "search:request",
+      event: "search_request",
       query,
       requestID,
       // Add content hash for correlation
@@ -221,7 +221,7 @@ function useSearch() {
     setError(null);
 
     const message = {
-      type: "search:request",
+      event: "search_request",
       query,
       requestID,
       maxResults: 25,

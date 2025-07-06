@@ -33,7 +33,7 @@ const testCases: TestCase[] = [
   {
     name: "Valid Search Request",
     message: {
-      type: "search:request",
+      event: "search_request",
       query: "bitcoin",
       requestID: "test_valid_001",
       maxResults: 10
@@ -43,7 +43,7 @@ const testCases: TestCase[] = [
   },
   {
     name: "Invalid JSON",
-    message: '{"type":"search:request","query":"btc","requestID":"test_invalid_json_002"', // Malformed JSON
+    message: '{"event":"search_request","query":"btc","requestID":"test_invalid_json_002"', // Malformed JSON
     expectedStatus: 'ERROR',
     expectedErrorCode: 1002,
     description: "Should handle malformed JSON with original message echo"
@@ -57,24 +57,24 @@ const testCases: TestCase[] = [
     },
     expectedStatus: 'ERROR',
     expectedErrorCode: 1003,
-    description: "Should reject message without type field"
+    description: "Should reject message without event field"
   },
   {
     name: "Invalid Type Field",
     message: {
-      type: "invalid:request",
+      event: "invalid_request",
       query: "litecoin",
       requestID: "test_invalid_type_004",
       maxResults: 5
     },
     expectedStatus: 'ERROR',
     expectedErrorCode: 1003,
-    description: "Should reject message with invalid type"
+    description: "Should reject message with invalid event"
   },
   {
     name: "Empty Query",
     message: {
-      type: "search:request",
+      event: "search_request",
       query: "",
       requestID: "test_empty_query_005",
       maxResults: 5
@@ -86,7 +86,7 @@ const testCases: TestCase[] = [
   {
     name: "Missing Query",
     message: {
-      type: "search:request",
+      event: "search_request",
       requestID: "test_missing_query_006",
       maxResults: 5
     },
@@ -97,7 +97,7 @@ const testCases: TestCase[] = [
   {
     name: "Invalid RequestID",
     message: {
-      type: "search:request",
+      event: "search_request",
       query: "dogecoin",
       requestID: "",
       maxResults: 5
@@ -109,7 +109,7 @@ const testCases: TestCase[] = [
   {
     name: "Missing RequestID",
     message: {
-      type: "search:request",
+      event: "search_request",
       query: "cardano",
       maxResults: 5
     },
@@ -120,7 +120,7 @@ const testCases: TestCase[] = [
   {
     name: "Invalid MaxResults - Zero",
     message: {
-      type: "search:request",
+      event: "search_request",
       query: "polkadot",
       requestID: "test_max_zero_009",
       maxResults: 0
@@ -132,7 +132,7 @@ const testCases: TestCase[] = [
   {
     name: "Invalid MaxResults - Too High",
     message: {
-      type: "search:request",
+      event: "search_request",
       query: "chainlink",
       requestID: "test_max_high_010",
       maxResults: 150
@@ -144,7 +144,7 @@ const testCases: TestCase[] = [
   {
     name: "Invalid MaxResults - String",
     message: {
-      type: "search:request",
+      event: "search_request",
       query: "solana",
       requestID: "test_max_string_011",
       maxResults: "25"
@@ -156,7 +156,7 @@ const testCases: TestCase[] = [
   {
     name: "Search Non-existent Coin",
     message: {
-      type: "search:request",
+      event: "search_request",
       query: "nonexistentcoin12345",
       requestID: "test_nonexistent_012",
       maxResults: 5
@@ -238,8 +238,8 @@ ws.onmessage = (event) => {
     const message = JSON.parse(event.data.toString());
     
     // Skip initial status and cache messages
-    if (message.type === "status" || message.type === "coins:update") {
-      console.log(`📡 Initial server message: ${message.type}`);
+    if (message.event === "status" || message.event === "coins_update" || message.event === "connection_established" || message.event === "watchlist_update") {
+      console.log(`📡 Initial server message: ${message.event}`);
       return;
     }
     
@@ -251,7 +251,7 @@ ws.onmessage = (event) => {
       let details = "";
       
       if (currentTestCase.expectedStatus === 'SUCCESS') {
-        passed = message.status === 'SUCCESS' || (message.variant === 'search:result');
+        passed = message.status === 'SUCCESS' || (message.variant === 'search_result');
         details = passed ? "Successful response received" : `Expected SUCCESS, got ${message.status}`;
       } else if (currentTestCase.expectedStatus === 'ERROR') {
         passed = message.status === 'ERROR';

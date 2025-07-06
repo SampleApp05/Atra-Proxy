@@ -22,7 +22,7 @@ ws.on('open', () => {
     // Test a search request
     setTimeout(() => {
         const searchRequest = {
-            type: "search:request",
+            event: "search_request",
             query: "bitcoin",
             requestID: "test_debug_001",
             maxResults: 5
@@ -36,17 +36,21 @@ ws.on('open', () => {
 ws.on('message', (data) => {
     try {
         const message = JSON.parse(data.toString());
-        console.log('📩 Received message type:', message.type || 'unknown');
+        console.log('📩 Received message event:', message.event || 'unknown');
         
-        if (message.type === 'connection:established') {
+        if (message.event === 'connection_established') {
             console.log('   ✅ Connection established');
-            console.log('   📊 Data state:', message.dataState);
+            console.log('   � Last updated:', message.lastUpdated);
+            console.log('   ⏭️  Next update:', message.nextUpdate);
             console.log('   🔐 Auth method:', message.authMethod);
-        } else if (message.type === 'status') {
-            console.log('   📡 Status:', message.status);
-        } else if (message.type === 'coins:update') {
+        } else if (message.event === 'status') {
+            console.log('   📡 Status - Loading:', message.isLoading);
+            console.log('   📅 Last updated:', message.lastUpdated);
+        } else if (message.event === 'coins_update') {
             console.log('   💰 Coin data received:', message.data?.length || 0, 'coins');
-        } else if (message.variant === 'search:result') {
+        } else if (message.event === 'watchlist_update') {
+            console.log('   📋 Watchlist update:', message.variant);
+        } else if (message.event === 'search_result') {
             console.log('   🔍 Search results:', message.data?.length || 0, 'results');
             if (message.data && message.data.length > 0) {
                 console.log('   🥇 First result:', message.data[0].name, `($${message.data[0].current_price})`);

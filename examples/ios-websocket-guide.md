@@ -68,10 +68,10 @@ class AtraProxyWebSocket: NSObject, URLSessionWebSocketDelegate {
             return
         }
         
-        let messageType = json["type"] as? String ?? "unknown"
+        let messageType = json["event"] as? String ?? "unknown"
         
         switch messageType {
-        case "connection:established":
+        case "connection_established":
             print("✅ Connection established")
             print("📊 Server data state: \(json["dataState"] as? String ?? "unknown")")
             print("🔐 Auth method: \(json["authMethod"] as? String ?? "unknown")")
@@ -81,21 +81,21 @@ class AtraProxyWebSocket: NSObject, URLSessionWebSocketDelegate {
             let lastUpdated = json["lastUpdated"] as? String ?? "never"
             print("📡 Status update: \(status) (last updated: \(lastUpdated))")
             
-        case "coins:update":
+        case "coins_update":
             if let coinsData = json["data"] as? [[String: Any]] {
                 print("💰 Received \(coinsData.count) coins")
                 // Process coin data here
                 processCoinData(coinsData)
             }
             
-        case "search:result":
+        case "search_result":
             handleSearchResult(json)
             
-        case "watchlist:update":
+        case "watchlist_update":
             handleWatchlistUpdate(json)
             
         default:
-            print("📩 Received message type: \(messageType)")
+            print("📩 Received message event: \(messageType)")
         }
     }
     
@@ -152,7 +152,7 @@ class AtraProxyWebSocket: NSObject, URLSessionWebSocketDelegate {
         let requestID = "ios_search_\(UUID().uuidString.prefix(8))"
         
         let searchMessage: [String: Any] = [
-            "type": "search:request",
+            "event": "search_request",
             "query": query,
             "requestID": requestID,
             "maxResults": maxResults
@@ -269,7 +269,7 @@ wss://your-domain.com
 ### 1. Connection Established
 ```json
 {
-  "type": "connection:established",
+  "event": "connection_established",
   "message": "WebSocket connection established",
   "serverTime": "2024-01-01T00:00:00Z",
   "dataState": "OK",
@@ -280,7 +280,7 @@ wss://your-domain.com
 ### 2. Status Updates
 ```json
 {
-  "type": "status",
+  "event": "status",
   "status": "OK",
   "lastUpdated": "2024-01-01T00:00:00Z"
 }
@@ -289,7 +289,7 @@ wss://your-domain.com
 ### 3. Coin Data Updates
 ```json
 {
-  "type": "coins:update",
+  "event": "coins_update",
   "data": [
     {
       "id": "bitcoin",
@@ -309,7 +309,7 @@ wss://your-domain.com
 ```json
 {
   "status": "SUCCESS",
-  "variant": "search:result",
+  "variant": "search_result",
   "requestID": "ios_search_12345",
   "data": [...] // Array of matching coins
 }
@@ -318,7 +318,7 @@ wss://your-domain.com
 ### 5. Watchlist Updates
 ```json
 {
-  "type": "watchlist:update",
+  "event": "watchlist_update",
   "variant": "top_gainers",
   "data": [...], // Array of top gaining coins
   "lastUpdated": "2024-01-01T00:00:00Z"

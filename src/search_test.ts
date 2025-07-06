@@ -143,7 +143,7 @@ function logSearchResult(testCase: SearchTestCase, response: any, passed: boolea
   console.log(`🔍 Query: "${testCase.query}"`);
   console.log(`🎯 Expected: ${testCase.expectedResultType} results`);
   
-  if (response.status === 'SUCCESS' || response.variant === 'search:result') {
+  if (response.status === 'SUCCESS' || response.event === 'search_result') {
     const resultCount = response.data ? response.data.length : 0;
     console.log(`📊 Results Count: ${resultCount}`);
     
@@ -213,7 +213,7 @@ function runNextSearchTest() {
   console.log(`\n🧪 Running Search Test ${testIndex + 1}/${searchTestCases.length}: ${testCase.name}`);
   
   const searchMessage: any = {
-    type: "search:request",
+    event: "search_request",
     query: testCase.query,
     requestID: testCase.requestID
   };
@@ -243,8 +243,8 @@ ws.on("message", (data) => {
     const msg = JSON.parse(data.toString());
     
     // Skip initial status and cache messages
-    if (msg.type === "status" || msg.type === "coins:update") {
-      console.log(`📡 Initial server message: ${msg.type}`);
+    if (msg.event === "status" || msg.event === "coins_update" || msg.event === "connection_established" || msg.event === "watchlist_update") {
+      console.log(`📡 Initial server message: ${msg.event}`);
       return;
     }
     
@@ -254,7 +254,7 @@ ws.on("message", (data) => {
       
       // Check if this response matches our current test
       if (msg.requestID === currentTestCase.requestID || 
-          (msg.variant === "search:result" && msg.requestID === currentTestCase.requestID)) {
+          (msg.event === "search_result" && msg.requestID === currentTestCase.requestID)) {
         
         const actualResultType = determineResultType(msg);
         let passed = false;

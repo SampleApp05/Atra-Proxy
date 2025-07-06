@@ -152,9 +152,9 @@ function handleSearchMessageIfNeeded(data: WebSocket.RawData, ws: WebSocket) {
     return;
   }
 
-  const { type, query, requestID, maxResults = 25 } = parsed;
+  const { event, query, requestID, maxResults = 25 } = parsed;
 
-  if (type !== SearchMessageVariant.SEARCH_REQUEST) {
+  if (event !== SearchMessageVariant.SEARCH_REQUEST) {
     let response = buildSocketErrorResponseWithOriginal(
       ErrorCode.INVALID_VARIANT_FIELD,
       action,
@@ -222,7 +222,7 @@ function handleSearchMessageIfNeeded(data: WebSocket.RawData, ws: WebSocket) {
         ws.send(
           JSON.stringify({
             status: MessageStatus.SUCCESS,
-            variant: SearchMessageVariant.SEARCH_RESULT,
+            event: SearchMessageVariant.SEARCH_RESULT,
             requestID,
             data: cgResults,
           })
@@ -242,7 +242,7 @@ function handleSearchMessageIfNeeded(data: WebSocket.RawData, ws: WebSocket) {
     ws.send(
       JSON.stringify({
         status: MessageStatus.SUCCESS,
-        variant: SearchMessageVariant.SEARCH_RESULT,
+        event: SearchMessageVariant.SEARCH_RESULT,
         requestID,
         data: results,
       })
@@ -270,7 +270,7 @@ wss.on("connection", (ws, request) => {
 
   // Send immediate welcome message with connection info
   ws.send(JSON.stringify({
-    type: "connection:established",
+    event: "connection_established",
     message: "WebSocket connection established",
     serverTime: new Date().toISOString(),
     lastUpdated: getUpdateTime(),
@@ -298,7 +298,7 @@ wss.on("connection", (ws, request) => {
 
   ws.send(
     JSON.stringify({
-      type: "status",
+      event: "status",
       lastUpdated,
       nextUpdate,
       isLoading: false
@@ -307,7 +307,7 @@ wss.on("connection", (ws, request) => {
 
   ws.send(
     JSON.stringify({
-      type: "coins:update",
+      event: "coins_update",
       data,
       lastUpdated,
       nextUpdate

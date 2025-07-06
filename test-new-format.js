@@ -22,16 +22,16 @@ ws.on('message', (data) => {
     try {
         const message = JSON.parse(data.toString());
         
-        if (message.type === 'connection:established') {
+        if (message.event === 'connection_established') {
             console.log('\n🎉 Connection Established Message:');
-            console.log('   📧 Type:', message.type);
+            console.log('   📧 Event:', message.event);
             console.log('   🕐 Server Time:', message.serverTime);
             console.log('   📅 Last Updated:', message.lastUpdated);
             console.log('   ⏭️  Next Update:', message.nextUpdate);
             console.log('   🔐 Auth Method:', message.authMethod);
-        } else if (message.type === 'status') {
+        } else if (message.event === 'status') {
             console.log('\n📊 Status Message:');
-            console.log('   📧 Type:', message.type);
+            console.log('   📧 Event:', message.event);
             console.log('   📅 Last Updated:', message.lastUpdated);
             console.log('   ⏭️  Next Update:', message.nextUpdate);
             console.log('   🔄 Is Loading:', message.isLoading);
@@ -47,15 +47,15 @@ ws.on('message', (data) => {
                     console.log('   ⏰ Overdue by:', Math.round(overdueMs / 1000), 'seconds');
                 }
             }
-        } else if (message.type === 'coins:update') {
+        } else if (message.event === 'coins_update') {
             console.log('\n💰 Coins Update Message:');
-            console.log('   📧 Type:', message.type);
+            console.log('   📧 Event:', message.event);
             console.log('   📊 Data Count:', message.data?.length || 0);
             console.log('   📅 Last Updated:', message.lastUpdated);
             console.log('   ⏭️  Next Update:', message.nextUpdate);
-        } else if (message.type === 'watchlist:update') {
+        } else if (message.event === 'watchlist_update') {
             console.log('\n📋 Watchlist Update Message:');
-            console.log('   📧 Type:', message.type);
+            console.log('   📧 Event:', message.event);
             console.log('   🏷️  Variant:', message.variant);
             console.log('   📊 Data Count:', message.data?.length || 0);
             console.log('   📅 Last Updated:', message.lastUpdated);
