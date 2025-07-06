@@ -2,8 +2,8 @@ import fs from "fs";
 import WebSocket, { WebSocketServer } from "ws";
 import { fetchTopCoins, Coin } from "./fetcher";
 import { getWatchlist } from "./watchlistBuilder";
-import { DataState } from "./utils/DataState";
 import { CoinUpdateVariant, SocketAction } from "./utils/MessageVariant";
+import { APIConfig } from "./utils/APIConfig";
 import {
   ErrorCode,
   buildSocketErrorResponse,
@@ -18,15 +18,19 @@ export function getCoinCache(): Coin[] {
   return coinCache;
 }
 
-export function getDataState(): DataState {
-  if (lastUpdated == null) return DataState.MISSING;
-  const updatedAt = new Date(lastUpdated).getTime();
-  const now = Date.now();
-  const diff = now - updatedAt;
+export function getUpdateTime(): string | null {
+  return lastUpdated;
+}
 
-  if (diff < 5 * 60 * 1000) return DataState.OK;
-  if (diff < 15 * 60 * 1000) return DataState.OUTDATED;
-  return DataState.STALE;
+export function getNextUpdateTime(): string {
+  if (!lastUpdated) {
+    // If no data, next update should be immediate
+    return new Date().toISOString();
+  }
+  
+  const lastUpdateMs = new Date(lastUpdated).getTime();
+  const nextUpdateMs = lastUpdateMs + APIConfig.REFRESH_INTERVAL;
+  return new Date(nextUpdateMs).toISOString();
 }
 
 export function loadCache(): void {
@@ -42,7 +46,11 @@ export function loadCache(): void {
 }
 
 export function getCache() {
-  return { data: coinCache, lastUpdated };
+  return { 
+    data: coinCache, 
+    lastUpdated: getUpdateTime(),
+    nextUpdate: getNextUpdateTime()
+  };
 }
 
 export function persistCache(data: Coin[]) {
@@ -51,8 +59,13 @@ export function persistCache(data: Coin[]) {
   fs.writeFileSync(CACHE_FILE, JSON.stringify({ data, lastUpdated }, null, 2));
 }
 
-export function broadcastStatus(wss: WebSocketServer, state: DataState) {
-  const message = JSON.stringify({ type: "status", state, lastUpdated });
+export function broadcastStatus(wss: WebSocketServer, isLoading: boolean = false) {
+  const message = JSON.stringify({ 
+    type: "status", 
+    lastUpdated: getUpdateTime(),
+    nextUpdate: getNextUpdateTime(),
+    isLoading
+  });
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);
@@ -60,7 +73,7 @@ export function broadcastStatus(wss: WebSocketServer, state: DataState) {
   });
 }
 
-function broadcastWatchlists(wss: WebSocketServer) {
+export function broadcastWatchlists(wss: WebSocketServer) {
   const variants = Object.values(CoinUpdateVariant);
 
   variants.forEach((variant) => {
@@ -69,7 +82,8 @@ function broadcastWatchlists(wss: WebSocketServer) {
       type: "watchlist:update",
       variant,
       data: list,
-      lastUpdated,
+      lastUpdated: getUpdateTime(),
+      nextUpdate: getNextUpdateTime()
     });
 
     wss.clients.forEach((client) => {
@@ -82,21 +96,20 @@ function broadcastWatchlists(wss: WebSocketServer) {
 
 export async function fetchCoinsData(wss: WebSocketServer) {
   try {
-    broadcastStatus(wss, DataState.LOADING); // or "loading"
+    broadcastStatus(wss, true); // isLoading = true
 
     const coins = await fetchTopCoins();
 
     if (coins.length === 0) throw new Error("Received empty coin list");
     persistCache(coins);
 
-    broadcastStatus(wss, DataState.OK);
+    broadcastStatus(wss, false); // isLoading = false
     broadcastWatchlists(wss);
   } catch (error) {
     console.error("❌ Failed to fetch coin data:", error);
 
     const response = buildSocketErrorResponse(ErrorCode.FETCH_FAILED, SocketAction.FETCH);
-    let dataState = getDataState();
-    broadcastStatus(wss, dataState);
+    broadcastStatus(wss, false); // isLoading = false, but we have error
 
     // Send error response to all connected clients
     wss.clients.forEach((client) => {

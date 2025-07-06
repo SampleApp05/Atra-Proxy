@@ -3,14 +3,15 @@ import WebSocket, { WebSocketServer } from "ws";
 import url from "url";
 
 import { APIConfig } from "./utils/APIConfig";
-import { DataState } from "./utils/DataState";
 import {
   loadCache,
   getCoinCache,
-  getDataState,
+  getUpdateTime,
+  getNextUpdateTime,
   getCache,
   fetchCoinsData,
   broadcastStatus,
+  broadcastWatchlists,
 } from "./cacheManager";
 
 import { searchCoins, fetchFromCoinGeckoAPI } from "./search";
@@ -53,7 +54,8 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ 
       status: 'healthy', 
-      dataState: getDataState(),
+      lastUpdated: getUpdateTime(),
+      nextUpdate: getNextUpdateTime(),
       timestamp: new Date().toISOString(),
       port: APIConfig.PORT
     }));
@@ -70,7 +72,8 @@ const server = http.createServer((req, res) => {
           <h1>🚀 Atra-Proxy WebSocket Server</h1>
           <p><strong>Status:</strong> Running</p>
           <p><strong>WebSocket Endpoint:</strong> ws://localhost:${APIConfig.PORT}</p>
-          <p><strong>Data State:</strong> ${getDataState()}</p>
+          <p><strong>Last Updated:</strong> ${getUpdateTime() || 'Never'}</p>
+          <p><strong>Next Update:</strong> ${getNextUpdateTime()}</p>
           <p><strong>Health Check:</strong> <a href="/health">/health</a></p>
           <hr>
           <h3>Authentication:</h3>
@@ -110,12 +113,21 @@ const wss = new WebSocketServer({
 // Load cache and broadcast initial status on server start
 loadCache();
 
-const initialStatus = getDataState();
-broadcastStatus(wss, initialStatus);
+broadcastStatus(wss, false); // Not loading initially
 
-if (initialStatus !== DataState.OK) {
-  // Refresh if cache is outdated or stale
+// Check if we need to refresh data immediately
+const lastUpdate = getUpdateTime();
+if (!lastUpdate) {
+  // No data at all, fetch immediately
   fetchCoinsData(wss);
+} else {
+  // Check if data is stale (older than refresh interval)
+  const lastUpdateMs = new Date(lastUpdate).getTime();
+  const now = Date.now();
+  if (now - lastUpdateMs > APIConfig.REFRESH_INTERVAL) {
+    // Data is stale, refresh it
+    fetchCoinsData(wss);
+  }
 }
 
 function handleSearchMessageIfNeeded(data: WebSocket.RawData, ws: WebSocket) {
@@ -261,7 +273,8 @@ wss.on("connection", (ws, request) => {
     type: "connection:established",
     message: "WebSocket connection established",
     serverTime: new Date().toISOString(),
-    dataState: getDataState(),
+    lastUpdated: getUpdateTime(),
+    nextUpdate: getNextUpdateTime(),
     authMethod: clientInfo.authMethod
   }));
 
@@ -281,21 +294,14 @@ wss.on("connection", (ws, request) => {
   });
 
   // Immediately send status and cache to new clients
-  const { data, lastUpdated } = getCache();
+  const { data, lastUpdated, nextUpdate } = getCache();
 
   ws.send(
     JSON.stringify({
       type: "status",
-      status: getDataState(),
       lastUpdated,
-    })
-  );
-
-  ws.send(
-    JSON.stringify({
-      type: "status",
-      status: getDataState(),
-      lastUpdated,
+      nextUpdate,
+      isLoading: false
     })
   );
 
@@ -304,8 +310,18 @@ wss.on("connection", (ws, request) => {
       type: "coins:update",
       data,
       lastUpdated,
+      nextUpdate
     })
   );
+
+  // Send current watchlists to new client
+  if (data && data.length > 0) {
+    // Create a single-client WebSocket server wrapper for broadcastWatchlists
+    const singleClientWss = {
+      clients: new Set([ws])
+    } as WebSocketServer;
+    broadcastWatchlists(singleClientWss);
+  }
 
   // Handle client disconnection
   ws.on("close", (code, reason) => {
@@ -332,5 +348,6 @@ server.listen(APIConfig.PORT, () => {
   console.log(`   - Format: Authorization: YOUR_TOKEN`);
   console.log(`🏥 Health Check: http://localhost:${APIConfig.PORT}/health`);
   console.log(`⏰ Cache Refresh Interval: ${APIConfig.REFRESH_INTERVAL / 1000}s`);
-  console.log(`📊 Initial Data State: ${getDataState()}`);
+  console.log(`📊 Last Updated: ${getUpdateTime() || 'Never'}`);
+  console.log(`📊 Next Update: ${getNextUpdateTime()}`);
 });
