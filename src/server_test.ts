@@ -14,6 +14,20 @@ const key = (process.env.CLIENT_AUTH_TOKEN as string) || "random-key";
 let testIndex = 0;
 const testResults: Array<{name: string, passed: boolean, details: string}> = [];
 
+// Test with Authorization header only (secure authentication)
+const useHeaderAuth = true; // Header-only authentication for security
+
+console.log(`🔐 Testing with Authorization header authentication (secure mode)`);
+
+const wsOptions = {
+  headers: {
+    'Authorization': `Bearer ${key}`,
+    'User-Agent': 'Atra-Proxy-Server-Test'
+  }
+};
+
+const wsUrl = "ws://localhost:8080";
+
 // Test cases covering various scenarios
 const testCases: TestCase[] = [
   {
@@ -207,10 +221,10 @@ function runNextTest(ws: WebSocket) {
   testIndex++;
 }
 
-const ws = new WebSocket("ws://localhost:8080?token=" + key);
+const ws = new WebSocket(wsUrl, wsOptions);
 
 ws.onopen = () => {
-  console.log("🚀 WebSocket connection opened");
+  console.log("🚀 WebSocket connection opened with secure header authentication");
   console.log("🔧 Starting comprehensive server tests...\n");
   
   // Start tests after a short delay to receive initial status messages

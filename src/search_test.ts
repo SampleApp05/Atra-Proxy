@@ -12,7 +12,20 @@ interface SearchTestCase {
 }
 
 const key = (process.env.CLIENT_AUTH_TOKEN as string) || "random-key";
-const ws = new WebSocket("ws://localhost:8080?token=" + key);
+
+// Test with Authorization header only (secure authentication)
+console.log(`🔐 Testing search with secure Authorization header authentication`);
+
+const wsOptions = {
+  headers: {
+    'Authorization': `Bearer ${key}`,
+    'User-Agent': 'Atra-Proxy-Search-Test'
+  }
+};
+
+const wsUrl = "ws://localhost:8080";
+
+const ws = new WebSocket(wsUrl, wsOptions);
 
 let testIndex = 0;
 const testResults: Array<{name: string, passed: boolean, details: string}> = [];

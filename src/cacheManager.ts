@@ -1,5 +1,5 @@
 import fs from "fs";
-import WebSocket from "ws";
+import WebSocket, { WebSocketServer } from "ws";
 import { fetchTopCoins, Coin } from "./fetcher";
 import { getWatchlist } from "./watchlistBuilder";
 import { DataState } from "./utils/DataState";
@@ -51,7 +51,7 @@ export function persistCache(data: Coin[]) {
   fs.writeFileSync(CACHE_FILE, JSON.stringify({ data, lastUpdated }, null, 2));
 }
 
-export function broadcastStatus(wss: WebSocket.Server, state: DataState) {
+export function broadcastStatus(wss: WebSocketServer, state: DataState) {
   const message = JSON.stringify({ type: "status", state, lastUpdated });
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
@@ -60,7 +60,7 @@ export function broadcastStatus(wss: WebSocket.Server, state: DataState) {
   });
 }
 
-function broadcastWatchlists(wss: WebSocket.Server) {
+function broadcastWatchlists(wss: WebSocketServer) {
   const variants = Object.values(CoinUpdateVariant);
 
   variants.forEach((variant) => {
@@ -80,7 +80,7 @@ function broadcastWatchlists(wss: WebSocket.Server) {
   });
 }
 
-export async function fetchCoinsData(wss: WebSocket.Server) {
+export async function fetchCoinsData(wss: WebSocketServer) {
   try {
     broadcastStatus(wss, DataState.LOADING); // or "loading"
 
