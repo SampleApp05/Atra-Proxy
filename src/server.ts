@@ -1,6 +1,5 @@
 import http from "http";
 import { WebSocketServer } from "ws";
-import url from "url";
 
 import { APIConfig } from "./utils/APIConfig";
 import {
@@ -57,9 +56,9 @@ const server = http.createServer(async (req, res) => {
   
   // Handle REST /search endpoint
   if (req.method === 'GET' && req.url && req.url.startsWith('/search')) {
-    const parsedUrl = url.parse(req.url, true);
-    const queryParam = parsedUrl.query.query;
-    const maxResults = parseInt(parsedUrl.query.maxResults as string) || 25;
+    const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+    const queryParam = parsedUrl.searchParams.get('query');
+    const maxResults = parseInt(parsedUrl.searchParams.get('maxResults') || '25') || 25;
     if (!queryParam || typeof queryParam !== 'string' || queryParam.trim() === '') {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Missing or invalid query parameter' }));

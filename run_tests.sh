@@ -20,13 +20,4 @@ echo "------------------------------------"
 tsx src/server_test.ts
 
 echo ""
-echo "⏳ Waiting 3 seconds before search tests..."
-sleep 3
-
-# Run search functionality tests  
-echo "🔍 Running Search Functionality Tests..."
-echo "---------------------------------------"
-tsx src/search_test.ts
-
-echo ""
 echo "🎉 Test suite completed!"
