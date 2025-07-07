@@ -57,26 +57,6 @@ class AtraProxyClient {
         }
     }
     
-    func sendSearch(query: String) {
-        let searchRequest: [String: Any] = [
-            "event": "search_request",
-            "query": query,
-            "requestID": UUID().uuidString,
-            "maxResults": 10
-        ]
-        
-        if let jsonData = try? JSONSerialization.data(withJSONObject: searchRequest),
-           let jsonString = String(data: jsonData, encoding: .utf8) {
-            webSocketTask?.send(.string(jsonString)) { error in
-                if let error = error {
-                    print("❌ Send error: \(error)")
-                } else {
-                    print("📤 Sent search: \(query)")
-                }
-            }
-        }
-    }
-    
     func disconnect() {
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         webSocketTask = nil
@@ -90,9 +70,9 @@ class AtraProxyClient {
 let client = AtraProxyClient()
 client.connect()
 
-// Wait a moment for connection, then search
+// Wait a moment for connection, then disconnect
 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-    client.sendSearch(query: "bitcoin")
+    client.disconnect()
 }
 ```
 
@@ -106,25 +86,6 @@ DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
   "serverTime": "2025-07-06T13:14:55.123Z",
   "dataState": "ok",
   "authMethod": "Header"
-}
-```
-
-### Search Results
-```json
-{
-  "status": "success",
-  "variant": "search_result",
-  "requestID": "your-request-id",
-  "data": [
-    {
-      "id": "bitcoin",
-      "name": "Bitcoin",
-      "symbol": "btc",
-      "current_price": 108231,
-      "market_cap": 2140000000000,
-      "price_change_percentage_24h": 2.5
-    }
-  ]
 }
 ```
 
@@ -176,3 +137,19 @@ webSocketTask?.receive { result in
 - Connection details are logged on the server side for debugging
 - The server sends immediate feedback about the authentication method used
 - Both Bearer and raw token formats are supported for flexibility
+
+# iOS URLRequest Guide
+
+> Note: Search is now performed via REST API, not WebSocket.
+
+## Example: REST /search usage in Swift
+
+```swift
+let url = URL(string: "http://localhost:8080/search?query=bitcoin&maxResults=10")!
+let task = URLSession.shared.dataTask(with: url) { data, response, error in
+    if let data = data {
+        print(String(data: data, encoding: .utf8) ?? "")
+    }
+}
+task.resume()
+```

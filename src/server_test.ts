@@ -10,6 +10,14 @@ interface TestCase {
   description: string;
 }
 
+interface RestTestCase {
+  name: string;
+  url: string;
+  expectedStatus: number;
+  description: string;
+  shouldHaveData?: boolean;
+}
+
 const key = (process.env.CLIENT_AUTH_TOKEN as string) || "random-key";
 let testIndex = 0;
 const testResults: Array<{name: string, passed: boolean, details: string}> = [];
@@ -28,143 +36,143 @@ const wsOptions = {
 
 const wsUrl = "ws://localhost:8080";
 
-// Test cases covering various scenarios
+// WebSocket protocol test cases (connection only, no message handling)
 const testCases: TestCase[] = [
+  // No message tests since WebSocket no longer handles search messages
+  // Only connection protocol is tested
+];
+
+// REST API test cases
+const restTestCases: RestTestCase[] = [
   {
-    name: "Valid Search Request",
-    message: {
-      event: "search_request",
-      query: "bitcoin",
-      requestID: "test_valid_001",
-      maxResults: 10
-    },
-    expectedStatus: 'SUCCESS',
-    description: "Should return successful search results"
+    name: "Valid Search - Bitcoin",
+    url: "/search?query=bitcoin&maxResults=5",
+    expectedStatus: 200,
+    description: "Should return bitcoin search results",
+    shouldHaveData: true
   },
   {
-    name: "Invalid JSON",
-    message: '{"event":"search_request","query":"btc","requestID":"test_invalid_json_002"', // Malformed JSON
-    expectedStatus: 'ERROR',
-    expectedErrorCode: 1002,
-    description: "Should handle malformed JSON with original message echo"
+    name: "Valid Search - ETH",
+    url: "/search?query=eth&maxResults=10",
+    expectedStatus: 200,
+    description: "Should return ethereum search results",
+    shouldHaveData: true
   },
   {
-    name: "Missing Type Field",
-    message: {
-      query: "ethereum",
-      requestID: "test_missing_type_003",
-      maxResults: 5
-    },
-    expectedStatus: 'ERROR',
-    expectedErrorCode: 1003,
-    description: "Should reject message without event field"
+    name: "Missing Query Parameter",
+    url: "/search?maxResults=5",
+    expectedStatus: 400,
+    description: "Should return 400 for missing query parameter"
   },
   {
-    name: "Invalid Type Field",
-    message: {
-      event: "invalid_request",
-      query: "litecoin",
-      requestID: "test_invalid_type_004",
-      maxResults: 5
-    },
-    expectedStatus: 'ERROR',
-    expectedErrorCode: 1003,
-    description: "Should reject message with invalid event"
+    name: "Empty Query Parameter",
+    url: "/search?query=&maxResults=5",
+    expectedStatus: 400,
+    description: "Should return 400 for empty query parameter"
   },
   {
-    name: "Empty Query",
-    message: {
-      event: "search_request",
-      query: "",
-      requestID: "test_empty_query_005",
-      maxResults: 5
-    },
-    expectedStatus: 'ERROR',
-    expectedErrorCode: 1005,
-    description: "Should reject empty query string"
+    name: "Valid Search - Obscure Coin",
+    url: "/search?query=veryveryobscurecoin12345&maxResults=5",
+    expectedStatus: 200,
+    description: "Should handle obscure coin searches (may return empty results)",
+    shouldHaveData: false
   },
   {
-    name: "Missing Query",
-    message: {
-      event: "search_request",
-      requestID: "test_missing_query_006",
-      maxResults: 5
-    },
-    expectedStatus: 'ERROR',
-    expectedErrorCode: 1005,
-    description: "Should reject message without query field"
-  },
-  {
-    name: "Invalid RequestID",
-    message: {
-      event: "search_request",
-      query: "dogecoin",
-      requestID: "",
-      maxResults: 5
-    },
-    expectedStatus: 'ERROR',
-    expectedErrorCode: 1006,
-    description: "Should reject empty requestID"
-  },
-  {
-    name: "Missing RequestID",
-    message: {
-      event: "search_request",
-      query: "cardano",
-      maxResults: 5
-    },
-    expectedStatus: 'ERROR',
-    expectedErrorCode: 1006,
-    description: "Should reject message without requestID"
-  },
-  {
-    name: "Invalid MaxResults - Zero",
-    message: {
-      event: "search_request",
-      query: "polkadot",
-      requestID: "test_max_zero_009",
-      maxResults: 0
-    },
-    expectedStatus: 'ERROR',
-    expectedErrorCode: 1007,
-    description: "Should reject maxResults of 0"
-  },
-  {
-    name: "Invalid MaxResults - Too High",
-    message: {
-      event: "search_request",
-      query: "chainlink",
-      requestID: "test_max_high_010",
-      maxResults: 150
-    },
-    expectedStatus: 'ERROR',
-    expectedErrorCode: 1007,
-    description: "Should reject maxResults over 100"
-  },
-  {
-    name: "Invalid MaxResults - String",
-    message: {
-      event: "search_request",
-      query: "solana",
-      requestID: "test_max_string_011",
-      maxResults: "25"
-    },
-    expectedStatus: 'ERROR',
-    expectedErrorCode: 1007,
-    description: "Should reject non-numeric maxResults"
-  },
-  {
-    name: "Search Non-existent Coin",
-    message: {
-      event: "search_request",
-      query: "nonexistentcoin12345",
-      requestID: "test_nonexistent_012",
-      maxResults: 5
-    },
-    expectedStatus: 'SUCCESS',
-    description: "Should return empty results or fallback to CoinGecko API"
+    name: "Health Check",
+    url: "/health",
+    expectedStatus: 200,
+    description: "Should return health status"
   }
 ];
+
+// Track initial messages for connection protocol test
+let initialMessages: string[] = [];
+let restTestIndex = 0;
+const baseUrl = "http://localhost:8080";
+
+async function runRestTests() {
+  console.log("\n🌐 Starting REST API tests...\n");
+  
+  for (let i = 0; i < restTestCases.length; i++) {
+    const testCase = restTestCases[i];
+    console.log(`\n🧪 Running REST Test ${i + 1}/${restTestCases.length}: ${testCase.name}`);
+    
+    try {
+      const response = await fetch(`${baseUrl}${testCase.url}`);
+      const responseText = await response.text();
+      let responseData;
+      
+      try {
+        responseData = JSON.parse(responseText);
+      } catch {
+        responseData = { text: responseText };
+      }
+      
+      const passed = response.status === testCase.expectedStatus;
+      let details = `HTTP ${response.status}`;
+      
+      if (testCase.shouldHaveData !== undefined) {
+        const hasData = responseData.data && Array.isArray(responseData.data) && responseData.data.length > 0;
+        if (testCase.shouldHaveData && !hasData) {
+          details += " (no data returned)";
+        } else if (!testCase.shouldHaveData && hasData) {
+          details += " (unexpected data returned)";
+        } else {
+          details += testCase.shouldHaveData ? ` (${responseData.data?.length || 0} results)` : " (empty results as expected)";
+        }
+      }
+      
+      testResults.push({
+        name: `REST: ${testCase.name}`,
+        passed,
+        details
+      });
+      
+      const status = passed ? "✅ PASS" : "❌ FAIL";
+      console.log(`${status} - ${testCase.name}`);
+      console.log(`📝 Description: ${testCase.description}`);
+      console.log(`🎯 Expected Status: ${testCase.expectedStatus}`);
+      console.log(`📊 Actual Status: ${response.status}`);
+      
+      if (responseData.data) {
+        console.log(`📊 Results Count: ${responseData.data.length}`);
+        if (responseData.data.length > 0) {
+          console.log(`🥇 First Result: ${responseData.data[0].name || responseData.data[0].id || 'Unknown'}`);
+        }
+      }
+      
+      if (!passed) {
+        console.log(`💥 Failure Details: Expected ${testCase.expectedStatus}, got ${response.status}`);
+      }
+      
+      console.log("─".repeat(50));
+      
+    } catch (error) {
+      console.error(`❌ REST Test Failed: ${testCase.name}`, error);
+      testResults.push({
+        name: `REST: ${testCase.name}`,
+        passed: false,
+        details: `Network error: ${error instanceof Error ? error.message : String(error)}`
+      });
+    }
+  }
+  
+  // Final summary
+  console.log("\n🎉 All tests completed!");
+  console.log("\n📊 COMPREHENSIVE TEST SUMMARY:");
+  const passed = testResults.filter(r => r.passed).length;
+  const total = testResults.length;
+  console.log(`✅ Passed: ${passed}/${total}`);
+  console.log(`❌ Failed: ${total - passed}/${total}`);
+  
+  console.log("\n📋 Detailed Results:");
+  testResults.forEach(result => {
+    const status = result.passed ? "✅" : "❌";
+    console.log(`${status} ${result.name}: ${result.details}`);
+  });
+  
+  process.exit(0);
+}
 
 function logTestResult(testCase: TestCase, actual: any, passed: boolean) {
   const status = passed ? "✅ PASS" : "❌ FAIL";
@@ -190,93 +198,57 @@ function logTestResult(testCase: TestCase, actual: any, passed: boolean) {
 }
 
 function runNextTest(ws: WebSocket) {
-  if (testIndex >= testCases.length) {
-    console.log("\n🎉 All tests completed!");
-    console.log("\n📊 TEST SUMMARY:");
-    const passed = testResults.filter(r => r.passed).length;
-    const total = testResults.length;
-    console.log(`✅ Passed: ${passed}/${total}`);
-    console.log(`❌ Failed: ${total - passed}/${total}`);
-    
-    testResults.forEach(result => {
-      const status = result.passed ? "✅" : "❌";
-      console.log(`${status} ${result.name}: ${result.details}`);
-    });
-    
-    ws.close();
-    return;
-  }
-
-  const testCase = testCases[testIndex];
-  console.log(`\n🧪 Running Test ${testIndex + 1}/${testCases.length}: ${testCase.name}`);
-  
-  // Send test message
-  if (typeof testCase.message === 'string') {
-    // Send malformed JSON as string
-    ws.send(testCase.message);
-  } else {
-    ws.send(JSON.stringify(testCase.message));
-  }
-  
-  testIndex++;
+  // Skip WebSocket message tests since search is now REST-only
+  // Go directly to REST tests after connection protocol is verified
+  console.log("\n🎉 WebSocket connection protocol verified!");
+  console.log("🌐 Starting REST API tests...");
+  ws.close();
+  // Start REST tests after WebSocket tests complete
+  setTimeout(() => {
+    runRestTests();
+  }, 1000);
 }
 
 const ws = new WebSocket(wsUrl, wsOptions);
 
 ws.onopen = () => {
   console.log("🚀 WebSocket connection opened with secure header authentication");
-  console.log("🔧 Starting comprehensive server tests...\n");
-  
-  // Start tests after a short delay to receive initial status messages
+  console.log("🔧 Testing WebSocket connection protocol...\n");
+  // Reset initial message tracker
+  initialMessages = [];
+  // Wait for initial messages, then start REST tests
   setTimeout(() => {
     runNextTest(ws);
-  }, 1000);
+  }, 3000); // Wait for all initial WebSocket messages
 };
 
 ws.onmessage = (event) => {
   try {
     const message = JSON.parse(event.data.toString());
-    
-    // Skip initial status and cache messages
-    if (message.event === "status" || message.event === "coins_update" || message.event === "connection_established" || message.event === "watchlist_update") {
+    // Track initial protocol messages
+    if (["status", "coins_update", "connection_established", "watchlist_update"].includes(message.event)) {
       console.log(`📡 Initial server message: ${message.event}`);
-      return;
-    }
-    
-    // Process test responses
-    if (testIndex > 0 && testIndex <= testCases.length) {
-      const currentTestCase = testCases[testIndex - 1];
-      
-      let passed = false;
-      let details = "";
-      
-      if (currentTestCase.expectedStatus === 'SUCCESS') {
-        passed = message.status === 'SUCCESS' || (message.variant === 'search_result');
-        details = passed ? "Successful response received" : `Expected SUCCESS, got ${message.status}`;
-      } else if (currentTestCase.expectedStatus === 'ERROR') {
-        passed = message.status === 'ERROR';
-        if (passed && currentTestCase.expectedErrorCode) {
-          passed = message.code === currentTestCase.expectedErrorCode;
-          details = passed ? 
-            `Correct error code ${message.code}` : 
-            `Expected error code ${currentTestCase.expectedErrorCode}, got ${message.code}`;
-        } else {
-          details = passed ? "Error response received" : `Expected ERROR, got ${message.status}`;
+      initialMessages.push(message.event);
+      // After receiving all expected initial messages, check protocol
+      if (initialMessages.length >= 4 && !testResults.some(r => r.name === "Connection Protocol")) {
+        const hasConnection = initialMessages.includes("connection_established");
+        const hasStatus = initialMessages.includes("status");
+        const hasCoins = initialMessages.includes("coins_update");
+        const hasWatchlist = initialMessages.includes("watchlist_update");
+        const passed = hasConnection && hasStatus && hasCoins && hasWatchlist;
+        testResults.push({
+          name: "WebSocket: Connection Protocol",
+          passed,
+          details: passed ? "All expected initial messages received" : `Missing: ${[!hasConnection && 'connection_established', !hasStatus && 'status', !hasCoins && 'coins_update', !hasWatchlist && 'watchlist_update'].filter(Boolean).join(', ')}`
+        });
+        console.log(`\n${passed ? '✅ PASS' : '❌ FAIL'} - Connection Protocol`);
+        console.log(`� Description: WebSocket should send connection_established, status, coins_update, and watchlist_update on connect`);
+        if (!passed) {
+          console.log(`💥 Failure Details: ${testResults[testResults.length-1].details}`);
         }
+        console.log("─".repeat(50));
       }
-      
-      testResults.push({
-        name: currentTestCase.name,
-        passed,
-        details
-      });
-      
-      logTestResult(currentTestCase, message, passed);
-      
-      // Continue to next test after a short delay
-      setTimeout(() => {
-        runNextTest(ws);
-      }, 500);
+      return;
     }
     
   } catch (err) {
@@ -290,6 +262,6 @@ ws.onerror = (err) => {
 };
 
 ws.onclose = () => {
-  console.log("🔌 Connection closed");
-  process.exit(0);
+  console.log("🔌 WebSocket connection closed");
+  // Don't exit here, let REST tests handle the final exit
 };

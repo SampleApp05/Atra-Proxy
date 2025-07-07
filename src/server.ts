@@ -1,5 +1,5 @@
 import http from "http";
-import WebSocket, { WebSocketServer } from "ws";
+import { WebSocketServer } from "ws";
 import url from "url";
 
 import { APIConfig } from "./utils/APIConfig";
@@ -15,13 +15,6 @@ import {
 } from "./cacheManager";
 
 import { searchCoins, fetchFromCoinGeckoAPI } from "./search";
-import { SearchMessageVariant, SocketAction} from "./utils/MessageVariant";
-import { MessageStatus } from "./utils/MessageStatus";
-import {
-  ErrorCode,
-  buildSocketErrorResponse,
-  buildSocketErrorResponseWithOriginal,
-} from "./utils/ErrorResponseBuilder";
 
 function validateClient(request: http.IncomingMessage): Boolean {
   // Only accept Authorization header for security
@@ -48,7 +41,7 @@ function validateClient(request: http.IncomingMessage): Boolean {
 }
 
 // Create HTTP server for health checks and WebSocket upgrade
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   // Handle HTTP requests for health checks, etc.
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -59,6 +52,33 @@ const server = http.createServer((req, res) => {
       timestamp: new Date().toISOString(),
       port: APIConfig.PORT
     }));
+    return;
+  }
+  
+  // Handle REST /search endpoint
+  if (req.method === 'GET' && req.url && req.url.startsWith('/search')) {
+    const parsedUrl = url.parse(req.url, true);
+    const queryParam = parsedUrl.query.query;
+    const maxResults = parseInt(parsedUrl.query.maxResults as string) || 25;
+    if (!queryParam || typeof queryParam !== 'string' || queryParam.trim() === '') {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing or invalid query parameter' }));
+      return;
+    }
+    let results = searchCoins(queryParam, getCoinCache(), maxResults);
+    if (results.length === 0) {
+      try {
+        const cgResults = await fetchFromCoinGeckoAPI(queryParam);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'SUCCESS', data: cgResults || [] }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to fetch results from CoinGecko API' }));
+      }
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'SUCCESS', data: results }));
     return;
   }
   
@@ -75,6 +95,7 @@ const server = http.createServer((req, res) => {
           <p><strong>Last Updated:</strong> ${getUpdateTime() || 'Never'}</p>
           <p><strong>Next Update:</strong> ${getNextUpdateTime()}</p>
           <p><strong>Health Check:</strong> <a href="/health">/health</a></p>
+          <p><strong>Search API:</strong> <a href="/search?query=bitcoin&maxResults=5">/search?query=bitcoin&maxResults=5</a></p>
           <hr>
           <h3>Authentication:</h3>
           <p><strong>⚠️ Authorization header required</strong></p>
@@ -96,7 +117,7 @@ webSocketTask = urlSession?.webSocketTask(with: request)
   
   // For all other routes, return 404
   res.writeHead(404, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'Not Found', message: 'Use WebSocket connection' }));
+  res.end(JSON.stringify({ error: 'Not Found', message: 'Use WebSocket for real-time data or /search for search queries' }));
 });
 
 // Create WebSocket server that can handle direct connections
@@ -130,125 +151,6 @@ if (!lastUpdate) {
   }
 }
 
-function handleSearchMessageIfNeeded(data: WebSocket.RawData, ws: WebSocket) {
-  let action = SearchMessageVariant.SEARCH_REQUEST;
-  
-  const rawMessage = data.toString();
-  let parsed: any;
-  
-  try {
-    parsed = JSON.parse(rawMessage);
-  } catch (err) {
-    // Send back the original message for frontend correlation
-    const response = {
-      status: MessageStatus.ERROR,
-      code: ErrorCode.INVALID_JSON,
-      message: "Failed to parse JSON message",
-      action,
-      originalMessage: rawMessage, // Echo back the problematic message
-      timestamp: new Date().toISOString()
-    };
-    ws.send(JSON.stringify(response));
-    return;
-  }
-
-  const { event, query, requestID, maxResults = 25 } = parsed;
-
-  if (event !== SearchMessageVariant.SEARCH_REQUEST) {
-    let response = buildSocketErrorResponseWithOriginal(
-      ErrorCode.INVALID_VARIANT_FIELD,
-      action,
-      rawMessage,
-      null,
-      requestID
-    );
-    ws.send(response);
-    return;
-  }
-
-  if (typeof query !== "string" || query.trim() === "") {
-    let response = buildSocketErrorResponseWithOriginal(
-      ErrorCode.INVALID_QUERY, 
-      action,
-      rawMessage,
-      null,
-      requestID
-    );
-    ws.send(response);
-    return;
-  }
-
-  if (typeof requestID !== "string" || requestID.trim() === "") {
-    let response = buildSocketErrorResponseWithOriginal(
-      ErrorCode.INVALID_REQUEST_ID,
-      action,
-      rawMessage,
-      null,
-      requestID
-    );
-    ws.send(response);
-    return;
-  }
-
-  if (typeof maxResults !== "number" || maxResults <= 0 || maxResults > 100) {
-    let response = buildSocketErrorResponseWithOriginal(
-      ErrorCode.INVALID_MAX_RESULTS,
-      action,
-      rawMessage,
-      null,
-      requestID
-    );
-    ws.send(response);
-    return;
-  }
-
-  let results = searchCoins(query, getCoinCache(), maxResults);
-
-  // If nothing found, fallback to CoinGecko search API
-  if (results.length === 0) {
-    fetchFromCoinGeckoAPI(query)
-      .then((cgResults) => {
-        if (cgResults === null) {
-          let response = buildSocketErrorResponse(
-            ErrorCode.SEARCH_FAILED,
-            action,
-            "Failed to fetch results from CoinGecko API",
-            requestID
-          );
-          ws.send(response);
-          return;
-        }
-
-        ws.send(
-          JSON.stringify({
-            status: MessageStatus.SUCCESS,
-            event: SearchMessageVariant.SEARCH_RESULT,
-            requestID,
-            data: cgResults,
-          })
-        );
-      })
-      .catch((err) => {
-        console.error("Search fallback failed:", err);
-        let response = buildSocketErrorResponse(
-          ErrorCode.SEARCH_FAILED,
-          action,
-          "Unhandled error during search fallback",
-          requestID
-        );
-        ws.send(response);
-      });
-  } else {
-    ws.send(
-      JSON.stringify({
-        status: MessageStatus.SUCCESS,
-        event: SearchMessageVariant.SEARCH_RESULT,
-        requestID,
-        data: results,
-      })
-    );
-  }
-}
 // Handle client connections
 wss.on("connection", (ws, request) => {
   // Authentication is already handled in verifyClient, log connection details
@@ -277,21 +179,6 @@ wss.on("connection", (ws, request) => {
     nextUpdate: getNextUpdateTime(),
     authMethod: clientInfo.authMethod
   }));
-
-  ws.on("message", (data) => {
-    try {
-      handleSearchMessageIfNeeded(data, ws);
-    } catch (error) {
-      console.error("❌ Error handling message:", error);
-      const errorResponse = {
-        status: MessageStatus.ERROR,
-        code: ErrorCode.UNEXPECTED_SERVER_ERROR,
-        message: "Internal server error while processing message",
-        timestamp: new Date().toISOString()
-      };
-      ws.send(JSON.stringify(errorResponse));
-    }
-  });
 
   // Immediately send status and cache to new clients
   const { data, lastUpdated, nextUpdate } = getCache();

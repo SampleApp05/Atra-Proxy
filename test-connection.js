@@ -18,19 +18,6 @@ const ws = new WebSocket(url, {
 
 ws.on('open', () => {
     console.log('✅ Connected to Atra-Proxy server');
-    
-    // Test a search request
-    setTimeout(() => {
-        const searchRequest = {
-            event: "search_request",
-            query: "bitcoin",
-            requestID: "test_debug_001",
-            maxResults: 5
-        };
-        
-        console.log('📤 Sending test search request:', searchRequest.query);
-        ws.send(JSON.stringify(searchRequest));
-    }, 2000);
 });
 
 ws.on('message', (data) => {
@@ -76,3 +63,5 @@ setTimeout(() => {
     console.log('⏰ Test timeout - closing connection');
     ws.close();
 }, 10000);
+
+// WebSocket search request logic removed. Use REST /search endpoint for search functionality.

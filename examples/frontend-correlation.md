@@ -1,5 +1,15 @@
 # Frontend Message Correlation Examples
 
+## Search is now performed via REST API
+
+### Example: REST /search usage
+
+```js
+fetch('http://localhost:8080/search?query=bitcoin&maxResults=10')
+  .then(res => res.json())
+  .then(data => console.log(data));
+```
+
 ## How to Handle Message Correlation with Original Message Echo
 
 ### 1. **Simple Timestamp + Random ID Approach**

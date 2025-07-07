@@ -218,16 +218,6 @@ class CryptoViewController: UIViewController {
         
         // Connect to WebSocket
         webSocket.connect()
-        
-        // Example: Search for Bitcoin after connection is established
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-            self.webSocket.sendSearchRequest(query: "bitcoin", maxResults: 10)
-        }
-        
-        // Example: Search for Ethereum
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
-            self.webSocket.sendSearchRequest(query: "ethereum", maxResults: 5)
-        }
     }
     
     deinit {
@@ -384,3 +374,19 @@ func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithErro
 4. **SSL in production**: Use `wss://` not `ws://`
 
 Your iOS app should now connect securely using the Authorization header! 🎉
+
+# iOS WebSocket Guide
+
+> Note: Search is now performed via REST API, not WebSocket.
+
+## Example: REST /search usage in Swift
+
+```swift
+let url = URL(string: "http://localhost:8080/search?query=bitcoin&maxResults=10")!
+let task = URLSession.shared.dataTask(with: url) { data, response, error in
+    if let data = data {
+        print(String(data: data, encoding: .utf8) ?? "")
+    }
+}
+task.resume()
+```
