@@ -1,21 +1,23 @@
 import { Coin } from "./fetcher";
 import { CoinUpdateVariant } from "./utils/MessageVariant";
 
-function getTopCoinsByCap(coins: Coin[]): Coin[] {
+function getTopCoinsByCap(coins: Coin[]): string[] {
   return coins
     .slice()
     .sort((lhs, rhs) => rhs.market_cap - lhs.market_cap)
-    .slice(0, 25);
+    .slice(0, 25)
+    .map(coin => coin.id);
 }
 
-function getTopCoinsByVolume(coins: Coin[]): Coin[] {
+function getTopCoinsByVolume(coins: Coin[]): string[] {
   return coins
     .slice()
     .sort((lhs, rhs) => rhs.total_volume - lhs.total_volume)
-    .slice(0, 25);
+    .slice(0, 25)
+    .map(coin => coin.id);
 }
 
-function getTopCoinsByMove(coins: Coin[], positive: Boolean): Coin[] {
+function getTopCoinsByMove(coins: Coin[], positive: Boolean): string[] {
   return coins
     .slice()
     .sort((lhs, rhs) =>
@@ -23,13 +25,14 @@ function getTopCoinsByMove(coins: Coin[], positive: Boolean): Coin[] {
         ? rhs.price_change_percentage_24h - lhs.price_change_percentage_24h
         : lhs.price_change_percentage_24h - rhs.price_change_percentage_24h
     )
-    .slice(0, 25);
+    .slice(0, 25)
+    .map(coin => coin.id);
 }
 
 export function getWatchlist(
   variant: CoinUpdateVariant,
   coins: Coin[]
-): Coin[] {
+): string[] {
   switch (variant) {
     case CoinUpdateVariant.TOP_MARKETCAP:
       return getTopCoinsByCap(coins);
