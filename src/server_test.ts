@@ -216,10 +216,17 @@ ws.onopen = () => {
   console.log("🔧 Testing WebSocket connection protocol...\n");
   // Reset initial message tracker
   initialMessages = [];
-  // Wait for initial messages, then start REST tests
+  
+  // Wait for connection_established, then send subscribe message
+  setTimeout(() => {
+    console.log("📡 Sending subscribe message...");
+    ws.send(JSON.stringify({ action: "subscribe" }));
+  }, 100);
+  
+  // Wait for all initial messages after subscription, then start REST tests
   setTimeout(() => {
     runNextTest(ws);
-  }, 3000); // Wait for all initial WebSocket messages
+  }, 3000);
 };
 
 ws.onmessage = (event) => {

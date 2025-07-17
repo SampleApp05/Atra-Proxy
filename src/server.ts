@@ -7,10 +7,9 @@ import {
   getCoinCache,
   getUpdateTime,
   getNextUpdateTime,
-  getCache,
   fetchCoinsData,
   broadcastStatus,
-  broadcastWatchlists,
+  sendInitialDataToClient,
 } from "./cacheManager";
 
 import { searchCoins, fetchFromCoinGeckoAPI } from "./search";
@@ -172,46 +171,45 @@ wss.on("connection", (ws, request) => {
   // Send immediate welcome message with connection info
   ws.send(JSON.stringify({
     event: "connection_established",
-    message: "WebSocket connection established",
-    serverTime: new Date().toISOString(),
-    lastUpdated: getUpdateTime(),
-    nextUpdate: getNextUpdateTime(),
-    authMethod: clientInfo.authMethod
+    data: {
+      message: "WebSocket connection established",
+      serverTime: new Date().toISOString(),
+      lastUpdated: getUpdateTime(),
+      nextUpdate: getNextUpdateTime(),
+      authMethod: clientInfo.authMethod
+    }
   }));
 
-  // Immediately send status and cache to new clients
-  const { data, lastUpdated, nextUpdate } = getCache();
-
-  ws.send(
-    JSON.stringify({
-      event: "status",
-      lastUpdated,
-      nextUpdate,
-      isLoading: false
-    })
-  );
-
-  ws.send(
-    JSON.stringify({
-      event: "coins_update",
-      data,
-      lastUpdated,
-      nextUpdate
-    })
-  );
-
-  // Send current watchlists to new client
-  if (data && data.length > 0) {
-    // Create a single-client WebSocket server wrapper for broadcastWatchlists
-    const singleClientWss = {
-      clients: new Set([ws])
-    } as WebSocketServer;
-    broadcastWatchlists(singleClientWss);
-  }
+  // Handle incoming messages from client
+  ws.on("message", (message) => {
+    try {
+      const data = JSON.parse(message.toString());
+      
+      // Handle subscribe message
+      if (data.action === "subscribe") {
+        console.log("📡 Client subscribed, sending initial data");
+        sendInitialDataToClient(ws);
+      }
+      
+    } catch (error) {
+      console.error("❌ Failed to parse client message:", error);
+      // Send error response for invalid JSON
+      ws.send(JSON.stringify({
+        event: "error",
+        data: {
+          code: 1002,
+          message: "Invalid JSON format",
+          timestamp: new Date().toISOString(),
+          severity: "medium"
+        }
+      }));
+    }
+  });
 
   // Handle client disconnection
   ws.on("close", (code, reason) => {
     console.log(`🔌 Client disconnected: ${code} ${reason || '(no reason)'}`);
+    console.log(`📊 Active connections: ${wss.clients.size}`);
   });
 
   // Handle WebSocket errors

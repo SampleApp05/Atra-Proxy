@@ -1,4 +1,3 @@
-import { MessageStatus } from "./MessageStatus";
 export enum ErrorCode {
   FETCH_FAILED = 1000,
   AUTHENTICATION_FAILED = 1001,
@@ -19,13 +18,15 @@ export function buildSocketErrorResponse(
   requestID: string | null = null
 ): string {
   return JSON.stringify({
-    status: MessageStatus.ERROR,
-    code,
-    message: buildMessage(code, message),
-    action,
-    requestID,
-    timestamp: new Date().toISOString(), // Add timestamp for frontend correlation
-    severity: getSeverity(code) // Add severity level
+    event: "error",
+    data: {
+      code,
+      message: buildMessage(code, message),
+      action,
+      requestID,
+      timestamp: new Date().toISOString(),
+      severity: getSeverity(code)
+    }
   });
 }
 
@@ -37,14 +38,16 @@ export function buildSocketErrorResponseWithOriginal(
   requestID: string | null = null
 ): string {
   return JSON.stringify({
-    status: MessageStatus.ERROR,
-    code,
-    message: buildMessage(code, message),
-    action,
-    requestID,
-    originalMessage, // Include the original message for correlation
-    timestamp: new Date().toISOString(),
-    severity: getSeverity(code)
+    event: "error",
+    data: {
+      code,
+      message: buildMessage(code, message),
+      action,
+      requestID,
+      originalMessage, // Include the original message for correlation
+      timestamp: new Date().toISOString(),
+      severity: getSeverity(code)
+    }
   });
 }
 

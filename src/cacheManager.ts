@@ -61,14 +61,21 @@ export function persistCache(data: Coin[]) {
 
 export function broadcastStatus(wss: WebSocketServer, isLoading: boolean = false) {
   const message = JSON.stringify({ 
-    event: "status", 
-    lastUpdated: getUpdateTime(),
-    nextUpdate: getNextUpdateTime(),
-    isLoading
+    event: "status",
+    data: {
+      lastUpdated: getUpdateTime(),
+      nextUpdate: getNextUpdateTime(),
+      isLoading
+    }
   });
+  
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(message);
+      try {
+        client.send(message);
+      } catch (error) {
+        console.error("❌ Failed to send status message to client:", error);
+      }
     }
   });
 }
@@ -80,18 +87,116 @@ export function broadcastWatchlists(wss: WebSocketServer) {
     const list = getWatchlist(variant, coinCache);
     const message = JSON.stringify({
       event: "watchlist_update",
-      variant,
-      data: list,
-      lastUpdated: getUpdateTime(),
-      nextUpdate: getNextUpdateTime()
+      data: {
+        variant,
+        lastUpdated: getUpdateTime(),
+        nextUpdate: getNextUpdateTime(),
+        data: list
+      }
     });
 
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(message);
+        try {
+          client.send(message);
+        } catch (error) {
+          console.error("❌ Failed to send watchlist message to client:", error);
+        }
       }
     });
   });
+}
+
+export function broadcastCoins(wss: WebSocketServer) {
+  const { data, lastUpdated, nextUpdate } = getCache();
+  const message = JSON.stringify({
+    event: "coins_update",
+    data: {
+      variant: "ALL_COINS",
+      lastUpdated,
+      nextUpdate,
+      data
+    }
+  });
+
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      try {
+        client.send(message);
+      } catch (error) {
+        console.error("❌ Failed to send coins message to client:", error);
+      }
+    }
+  });
+}
+
+export function sendInitialDataToClient(ws: WebSocket) {
+  const { data, lastUpdated, nextUpdate } = getCache();
+
+  try {
+    console.log(`📊 Sending initial data to client. Cache has ${data?.length || 0} coins`);
+    
+    // Send status first
+    ws.send(JSON.stringify({
+      event: "status",
+      data: {
+        lastUpdated,
+        nextUpdate,
+        isLoading: false
+      }
+    }));
+    console.log("✅ Status sent");
+
+    // Send coins update after 1 second
+    setTimeout(() => {
+      ws.send(JSON.stringify({
+        event: "coins_update",
+        data: {
+          variant: "ALL_COINS",
+          lastUpdated,
+          nextUpdate,
+          data
+        }
+      }));
+      console.log("✅ Coins update sent");
+
+      // Send watchlists if we have coin data after another 1 second
+      setTimeout(() => {
+        if (data && data.length > 0) {
+          console.log("📋 Sending watchlists...");
+          const variants = Object.values(CoinUpdateVariant);
+          
+          // Send watchlists with 1 second delay between each
+          variants.forEach((variant, index) => {
+            setTimeout(() => {
+              try {
+                const list = getWatchlist(variant, coinCache);
+                console.log(`📋 Sending watchlist for ${variant}: ${list.length} coins`);
+                ws.send(JSON.stringify({
+                  event: "watchlist_update",
+                  data: {
+                    variant,
+                    lastUpdated,
+                    nextUpdate,
+                    data: list
+                  }
+                }));
+                console.log(`✅ Watchlist ${variant} sent`);
+              } catch (watchlistError) {
+                console.error(`❌ Failed to send watchlist ${variant}:`, watchlistError);
+              }
+            }, index * 1000); // 1 second delay between each watchlist
+          });
+        } else {
+          console.log("⚠️ No coin data available, skipping watchlists");
+        }
+      }, 1000);
+    }, 1000);
+    
+    console.log("✅ Initial data sending started with delays");
+  } catch (error) {
+    console.error("❌ Failed to send initial data to client:", error);
+  }
 }
 
 export async function fetchCoinsData(wss: WebSocketServer) {
@@ -104,6 +209,7 @@ export async function fetchCoinsData(wss: WebSocketServer) {
     persistCache(coins);
 
     broadcastStatus(wss, false); // isLoading = false
+    broadcastCoins(wss);
     broadcastWatchlists(wss);
   } catch (error) {
     console.error("❌ Failed to fetch coin data:", error);
@@ -114,7 +220,11 @@ export async function fetchCoinsData(wss: WebSocketServer) {
     // Send error response to all connected clients
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(response);
+        try {
+          client.send(response);
+        } catch (error) {
+          console.error("❌ Failed to send error message to client:", error);
+        }
       }
     });
   }
