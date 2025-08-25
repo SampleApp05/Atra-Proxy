@@ -1,5 +1,6 @@
 import WebSocket from "ws";
 import dotenv from "dotenv";
+import { v4 as uuidv4 } from "uuid";
 dotenv.config();
 
 interface TestCase {
@@ -16,6 +17,12 @@ interface RestTestCase {
   expectedStatus: number;
   description: string;
   shouldHaveData?: boolean;
+}
+
+interface EventValidator {
+  name: string;
+  event: string;
+  validator: (data: any) => { valid: boolean; details: string };
 }
 
 const key = (process.env.CLIENT_AUTH_TOKEN as string) || "random-key";
@@ -37,10 +44,7 @@ const wsOptions = {
 const wsUrl = "ws://localhost:8080";
 
 // WebSocket protocol test cases (connection only, no message handling)
-const testCases: TestCase[] = [
-  // No message tests since WebSocket no longer handles search messages
-  // Only connection protocol is tested
-];
+const testCases: TestCase[] = [];
 
 // REST API test cases
 const restTestCases: RestTestCase[] = [
@@ -85,8 +89,87 @@ const restTestCases: RestTestCase[] = [
   }
 ];
 
+// Validators for each message type
+const eventValidators: EventValidator[] = [
+  {
+    name: "Connection Established",
+    event: "connection_established",
+    validator: (data) => {
+      const valid = typeof data.message === 'string' && 
+                    typeof data.serverTime === 'string' &&
+                    (data.lastUpdated === null || typeof data.lastUpdated === 'string') && 
+                    typeof data.nextUpdate === 'string' && 
+                    typeof data.authMethod === 'string';
+      return { 
+        valid, 
+        details: valid ? "Valid connection_established format" : 
+          "Invalid format: missing required fields (message, serverTime, nextUpdate, authMethod)"
+      };
+    }
+  },
+  {
+    name: "Status Update",
+    event: "status",
+    validator: (data) => {
+      const valid = (data.lastUpdated === null || typeof data.lastUpdated === 'string') && 
+                    typeof data.nextUpdate === 'string' && 
+                    typeof data.isLoading === 'boolean';
+      return { 
+        valid, 
+        details: valid ? "Valid status format" : 
+          "Invalid format: missing required fields (lastUpdated, nextUpdate, isLoading)"
+      };
+    }
+  },
+  {
+    name: "Cache Update",
+    event: "cache_update",
+    validator: (data) => {
+      const valid = (data.lastUpdated === null || typeof data.lastUpdated === 'string') && 
+                    typeof data.nextUpdate === 'string' && 
+                    Array.isArray(data.data);
+      
+      const coinValid = data.data.length === 0 || 
+                       (data.data[0].id && 
+                        typeof data.data[0].name === 'string' && 
+                        typeof data.data[0].current_price === 'number');
+      
+      return { 
+        valid: valid && coinValid, 
+        details: valid ? (coinValid ? "Valid cache_update format" : "Invalid coin data format") : 
+          "Invalid format: missing required fields (lastUpdated, nextUpdate, data[])"
+      };
+    }
+  },
+  {
+    name: "Watchlist Update",
+    event: "watchlist_update",
+    validator: (data) => {
+      // Check if id is a valid UUID
+      const isValidUUID = (id: string): boolean => {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        return uuidRegex.test(id);
+      };
+      
+      const valid = isValidUUID(data.id) && 
+                    typeof data.name === 'string' && 
+                    Array.isArray(data.coins);
+      
+      // Check if coins array contains strings
+      const coinsValid = data.coins.length === 0 || 
+                        typeof data.coins[0] === 'string';
+      
+      return { 
+        valid: valid && coinsValid, 
+        details: valid ? (coinsValid ? "Valid watchlist_update format" : "Invalid coins array format") : 
+          `Invalid format: missing or malformed required fields (id: ${data.id}, name, coins[])`
+      };
+    }
+  }
+];
+
 // Track initial messages for connection protocol test
-let initialMessages: string[] = [];
+const receivedMessages: Map<string, any> = new Map();
 let restTestIndex = 0;
 const baseUrl = "http://localhost:8080";
 
@@ -174,35 +257,80 @@ async function runRestTests() {
   process.exit(0);
 }
 
-function logTestResult(testCase: TestCase, actual: any, passed: boolean) {
-  const status = passed ? "✅ PASS" : "❌ FAIL";
-  console.log(`\n${status} - ${testCase.name}`);
-  console.log(`📝 Description: ${testCase.description}`);
-  console.log(`🎯 Expected Status: ${testCase.expectedStatus}`);
-  console.log(`📊 Actual Status: ${actual.status || 'UNKNOWN'}`);
+function validateEventData() {
+  console.log("\n🔍 Validating WebSocket events data structure...\n");
   
-  if (testCase.expectedErrorCode) {
-    console.log(`🔢 Expected Error Code: ${testCase.expectedErrorCode}`);
-    console.log(`🔢 Actual Error Code: ${actual.code || 'N/A'}`);
+  // Check if we received all expected event types
+  const expectedEvents = ["connection_established", "status", "cache_update", "watchlist_update"];
+  const receivedEvents = Array.from(receivedMessages.keys());
+  
+  // Check that all required events were received
+  const missingEvents = expectedEvents.filter(e => !receivedEvents.includes(e));
+  const extraEvents = receivedEvents.filter(e => !expectedEvents.includes(e));
+  
+  const allEventsReceived = missingEvents.length === 0;
+  
+  testResults.push({
+    name: "WebSocket: Required Events",
+    passed: allEventsReceived,
+    details: allEventsReceived ? 
+      `All required events received (${expectedEvents.join(", ")})` : 
+      `Missing events: ${missingEvents.join(", ")}`
+  });
+  
+  console.log(`${allEventsReceived ? '✅ PASS' : '❌ FAIL'} - Required Events Check`);
+  console.log(`📝 Description: Server should send all required event types`);
+  
+  if (extraEvents.length > 0) {
+    console.log(`⚠️ Warning: Received unexpected events: ${extraEvents.join(", ")}`);
   }
   
-  if (actual.originalMessage) {
-    console.log(`📧 Original Message Echoed: YES`);
-  }
-  
-  if (!passed) {
-    console.log(`💥 Failure Details: Expected ${testCase.expectedStatus}, got ${actual.status}`);
+  if (!allEventsReceived) {
+    console.log(`💥 Missing events: ${missingEvents.join(", ")}`);
   }
   
   console.log("─".repeat(50));
+  
+  // Validate each received event's data structure
+  receivedEvents.forEach(eventType => {
+    const message = receivedMessages.get(eventType);
+    
+    // Find validator for this event type
+    const validator = eventValidators.find(v => v.event === eventType);
+    if (!validator) {
+      console.log(`⚠️ Warning: No validator for event type: ${eventType}`);
+      return;
+    }
+    
+    // Validate event data structure
+    const validationResult = validator.validator(message.data);
+    
+    testResults.push({
+      name: `WebSocket: ${validator.name} Format`,
+      passed: validationResult.valid,
+      details: validationResult.details
+    });
+    
+    console.log(`${validationResult.valid ? '✅ PASS' : '❌ FAIL'} - ${validator.name} Format`);
+    console.log(`📝 Description: ${eventType} event should have correct data structure`);
+    
+    if (!validationResult.valid) {
+      console.log(`💥 Validation Failed: ${validationResult.details}`);
+      console.log(`📄 Received: ${JSON.stringify(message.data, null, 2)}`);
+    }
+    
+    console.log("─".repeat(50));
+  });
 }
 
 function runNextTest(ws: WebSocket) {
-  // Skip WebSocket message tests since search is now REST-only
-  // Go directly to REST tests after connection protocol is verified
+  // Validate event data structures before moving to REST tests
+  validateEventData();
+  
   console.log("\n🎉 WebSocket connection protocol verified!");
   console.log("🌐 Starting REST API tests...");
   ws.close();
+  
   // Start REST tests after WebSocket tests complete
   setTimeout(() => {
     runRestTests();
@@ -214,8 +342,6 @@ const ws = new WebSocket(wsUrl, wsOptions);
 ws.onopen = () => {
   console.log("🚀 WebSocket connection opened with secure header authentication");
   console.log("🔧 Testing WebSocket connection protocol...\n");
-  // Reset initial message tracker
-  initialMessages = [];
   
   // Wait for connection_established, then send subscribe message
   setTimeout(() => {
@@ -223,41 +349,31 @@ ws.onopen = () => {
     ws.send(JSON.stringify({ action: "subscribe" }));
   }, 100);
   
-  // Wait for all initial messages after subscription, then start REST tests
+  // Wait for all initial messages after subscription, then validate and start REST tests
   setTimeout(() => {
     runNextTest(ws);
-  }, 3000);
+  }, 6000); // Increased timeout to ensure all watchlist messages arrive (with delays)
 };
 
 ws.onmessage = (event) => {
   try {
     const message = JSON.parse(event.data.toString());
-    // Track initial protocol messages
-    if (["status", "coins_update", "connection_established", "watchlist_update"].includes(message.event)) {
-      console.log(`📡 Initial server message: ${message.event}`);
-      initialMessages.push(message.event);
-      // After receiving all expected initial messages, check protocol
-      if (initialMessages.length >= 4 && !testResults.some(r => r.name === "Connection Protocol")) {
-        const hasConnection = initialMessages.includes("connection_established");
-        const hasStatus = initialMessages.includes("status");
-        const hasCoins = initialMessages.includes("coins_update");
-        const hasWatchlist = initialMessages.includes("watchlist_update");
-        const passed = hasConnection && hasStatus && hasCoins && hasWatchlist;
-        testResults.push({
-          name: "WebSocket: Connection Protocol",
-          passed,
-          details: passed ? "All expected initial messages received" : `Missing: ${[!hasConnection && 'connection_established', !hasStatus && 'status', !hasCoins && 'coins_update', !hasWatchlist && 'watchlist_update'].filter(Boolean).join(', ')}`
-        });
-        console.log(`\n${passed ? '✅ PASS' : '❌ FAIL'} - Connection Protocol`);
-        console.log(`� Description: WebSocket should send connection_established, status, coins_update, and watchlist_update on connect`);
-        if (!passed) {
-          console.log(`💥 Failure Details: ${testResults[testResults.length-1].details}`);
-        }
-        console.log("─".repeat(50));
-      }
-      return;
-    }
     
+    // Track all received message types
+    if (message.event) {
+      console.log(`📡 Received message: ${message.event}`);
+      
+      // Store first message of each type
+      if (!receivedMessages.has(message.event)) {
+        receivedMessages.set(message.event, message);
+      }
+      
+      // For watchlist_update, track variant types 
+      if (message.event === "watchlist_update" && message.data && message.data.name) {
+        const watchlistName = message.data.name;
+        console.log(`📋 Watchlist received: ${watchlistName}`);
+      }
+    }
   } catch (err) {
     console.error("❌ Failed to parse server response:", err);
     console.error("📄 Raw message:", event.data);

@@ -1,5 +1,6 @@
 import fs from "fs";
 import WebSocket, { WebSocketServer } from "ws";
+import {v5 as uuidv5} from "uuid";
 import { fetchTopCoins, Coin } from "./fetcher";
 import { getWatchlist } from "./watchlistBuilder";
 import { CoinUpdateVariant, SocketAction } from "./utils/MessageVariant";
@@ -8,6 +9,7 @@ import {
   ErrorCode,
   buildSocketErrorResponse,
 } from "./utils/ErrorResponseBuilder";
+import { get } from "http";
 
 const CACHE_FILE = "./cache/coinCache.json";
 
@@ -80,6 +82,23 @@ export function broadcastStatus(wss: WebSocketServer, isLoading: boolean = false
   });
 }
 
+function getWatchlistID(variant: CoinUpdateVariant): string {
+  return uuidv5(variant, APIConfig.WATCHLIST_NAMESPACE);
+}
+
+function fetchWatchlistName(variant: CoinUpdateVariant): string {
+  switch (variant) {
+    case CoinUpdateVariant.TOP_MARKETCAP:
+      return "Top Market Cap";
+    case CoinUpdateVariant.TOP_GAINERS:
+      return "Top Gainers";
+    case CoinUpdateVariant.TOP_LOSERS:
+      return "Top Losers";
+    case CoinUpdateVariant.TOP_VOLUME:
+      return "Most Traded";
+  }
+}
+
 export function broadcastWatchlists(wss: WebSocketServer) {
   const variants = Object.values(CoinUpdateVariant);
 
@@ -88,10 +107,9 @@ export function broadcastWatchlists(wss: WebSocketServer) {
     const message = JSON.stringify({
       event: "watchlist_update",
       data: {
-        variant,
-        lastUpdated: getUpdateTime(),
-        nextUpdate: getNextUpdateTime(),
-        data: list
+        id: getWatchlistID(variant),
+        name: fetchWatchlistName(variant),
+        coins: list
       }
     });
 
@@ -110,9 +128,8 @@ export function broadcastWatchlists(wss: WebSocketServer) {
 export function broadcastCoins(wss: WebSocketServer) {
   const { data, lastUpdated, nextUpdate } = getCache();
   const message = JSON.stringify({
-    event: "coins_update",
+    event: "cache_update",
     data: {
-      variant: "ALL_COINS",
       lastUpdated,
       nextUpdate,
       data
@@ -150,9 +167,8 @@ export function sendInitialDataToClient(ws: WebSocket) {
     // Send coins update after 1 second
     setTimeout(() => {
       ws.send(JSON.stringify({
-        event: "coins_update",
+        event: "cache_update",
         data: {
-          variant: "ALL_COINS",
           lastUpdated,
           nextUpdate,
           data
@@ -175,10 +191,9 @@ export function sendInitialDataToClient(ws: WebSocket) {
                 ws.send(JSON.stringify({
                   event: "watchlist_update",
                   data: {
-                    variant,
-                    lastUpdated,
-                    nextUpdate,
-                    data: list
+                    id: getWatchlistID(variant),
+                    name: fetchWatchlistName(variant),
+                    coins: list
                   }
                 }));
                 console.log(`✅ Watchlist ${variant} sent`);

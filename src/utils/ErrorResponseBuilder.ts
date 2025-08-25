@@ -56,6 +56,8 @@ function buildMessage(code: ErrorCode, message: string | null): string {
     return message;
   }
   switch (code) {
+    case ErrorCode.FETCH_FAILED:
+      return "Failed to fetch data from external provider";
     case ErrorCode.AUTHENTICATION_FAILED:
       return "Authentication failed";
     case ErrorCode.INVALID_JSON:

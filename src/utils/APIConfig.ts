@@ -7,7 +7,8 @@ export class APIConfig {
     static COINGECKO_API_HOST = "https://api.coingecko.com";
     static COINGECKO_API_HEADER_KEY = "x-cg-demo-api-key"; //
     static AUTH_TOKEN = process.env.CLIENT_AUTH_TOKEN || "missing-auth-token";
-    static REFRESH_INTERVAL = 300 * 60 * 1000; // 5 minutes
+    static REFRESH_INTERVAL = 300 * 60 * 1000; // 300 minutes
+    static WATCHLIST_NAMESPACE = process.env.WATCHLIST_NAMESPACE || "6ba7b810-9dad-11d1-80b4-00c04fd430c8"; // Default UUID namespace
 
     private constructor() {}
 }
