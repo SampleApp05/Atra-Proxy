@@ -165,7 +165,6 @@ export function sendInitialDataToClient(ws: WebSocket) {
     console.log("✅ Status sent");
 
     // Send coins update after 1 second
-    setTimeout(() => {
       ws.send(JSON.stringify({
         event: "cache_update",
         data: {
@@ -177,14 +176,12 @@ export function sendInitialDataToClient(ws: WebSocket) {
       console.log("✅ Coins update sent");
 
       // Send watchlists if we have coin data after another 1 second
-      setTimeout(() => {
         if (data && data.length > 0) {
           console.log("📋 Sending watchlists...");
           const variants = Object.values(CoinUpdateVariant);
           
           // Send watchlists with 1 second delay between each
           variants.forEach((variant, index) => {
-            setTimeout(() => {
               try {
                 const list = getWatchlist(variant, coinCache);
                 console.log(`📋 Sending watchlist for ${variant}: ${list.length} coins`);
@@ -200,14 +197,10 @@ export function sendInitialDataToClient(ws: WebSocket) {
               } catch (watchlistError) {
                 console.error(`❌ Failed to send watchlist ${variant}:`, watchlistError);
               }
-            }, index * 1000); // 1 second delay between each watchlist
           });
         } else {
           console.log("⚠️ No coin data available, skipping watchlists");
         }
-      }, 1000);
-    }, 1000);
-    
     console.log("✅ Initial data sending started with delays");
   } catch (error) {
     console.error("❌ Failed to send initial data to client:", error);
